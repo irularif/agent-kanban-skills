@@ -6,6 +6,7 @@ import { GhError, createGh, repoInfo, repoRoot } from './lib/gh.mjs'
 import { readBinding, writeBinding } from './lib/binding.mjs'
 import { ensureBoard } from './lib/board.mjs'
 import { writeRepoFiles } from './lib/repo-files.mjs'
+import { installHooks } from './lib/hooks.mjs'
 
 const USAGE = `Usage: kanban.mjs <command> [options]
 
@@ -53,6 +54,9 @@ function init(args) {
     writeBinding(root, r.binding)
     files = writeRepoFiles(root, r.binding, { areas, language: values.language })
     files.changed.unshift('.github/kanban.json')
+    const hooks = installHooks(root)
+    files.changed.push(...hooks.changed)
+    r.manual.push(...hooks.manual)
   }
   console.log(`${dryRun ? 'Would create' : 'Created'}: ${r.created.length ? r.created.join(', ') : 'nothing (board up to date)'}`)
   if (r.binding.url) console.log(`Board: ${r.binding.url}`)
