@@ -33,3 +33,12 @@ test('writeBinding reports whether content changed', () => {
   assert.equal(writeBinding(d, b), false)
   assert.equal(writeBinding(d, { ...b, projectNumber: 2 }), true)
 })
+
+test('readBinding validates the shape', () => {
+  for (const bad of [{ owner: 1, projectNumber: 3, url: 'u' }, { owner: 'o', projectNumber: '3', url: 'u' }, { owner: 'o', projectNumber: 3 }, { owner: 'o', projectNumber: 3, url: 5 }, []]) {
+    const d = tmp()
+    mkdirSync(join(d, '.github'))
+    writeFileSync(join(d, '.github', 'kanban.json'), JSON.stringify(bad))
+    assert.throws(() => readBinding(d), /^Error: kanban: invalid \.github\/kanban\.json/)
+  }
+})

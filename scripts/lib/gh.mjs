@@ -31,8 +31,8 @@ export function createGh({ exec = spawnSync, cwd } = {}) {
     const args = ['api', 'graphql', '-f', `query=${query}`]
     for (const [k, v] of Object.entries(vars)) {
       if (typeof v === 'string') args.push('-f', `${k}=${v}`)
-      else if (typeof v === 'number' || typeof v === 'boolean') args.push('-F', `${k}=${v}`)
-      else throw new GhError(`kanban: graphql var ${k} must be scalar`)
+      else if (typeof v === 'boolean' || (typeof v === 'number' && Number.isFinite(v))) args.push('-F', `${k}=${v}`)
+      else throw new GhError(`kanban: graphql var ${k} must be a string, boolean or finite number (got ${v})`)
     }
     const res = json(args)
     if (res.errors?.length) {
@@ -58,6 +58,7 @@ export function repoInfo(gh) {
     'query($login: String!) { repositoryOwner(login: $login) { id __typename } }',
     { login: repo.owner.login },
   ).repositoryOwner
+  if (!owner) throw new Error(`kanban: GitHub owner '${repo.owner.login}' not found`)
   return {
     owner: repo.owner.login,
     name: repo.name,

@@ -13,11 +13,16 @@ export function readBinding(root) {
     if (e.code === 'ENOENT') return null
     throw e
   }
+  let b
   try {
-    return JSON.parse(raw)
+    b = JSON.parse(raw)
   } catch (e) {
     throw new Error(`kanban: invalid .github/kanban.json: ${e.message}`)
   }
+  if (typeof b?.owner !== 'string' || typeof b.projectNumber !== 'number' || typeof b.url !== 'string') {
+    throw new Error('kanban: invalid .github/kanban.json: expected owner (string), projectNumber (number), url (string)')
+  }
+  return b
 }
 
 export function writeBinding(root, binding) {

@@ -16,13 +16,14 @@ const gitOk = (root, ...args) => {
   }
 }
 
-const slugify = (title) =>
+const slugify = (title, n) =>
   title
     .toLowerCase()
+    .replace(/^[a-z]+(\([^)]*\))?!?:\s*/, '')
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+/, '')
     .slice(0, 40)
-    .replace(/-+$/, '')
+    .replace(/-+$/, '') || `issue-${n}`
 
 function loadBoard(gh, root) {
   const binding = readBinding(root)
@@ -51,8 +52,7 @@ const ITEMS_QUERY = `query($id: ID!, $cursor: String) {
   }
 }`
 
-export function closeParents(gh, binding) {
-  const projectId = findProjectId(gh, binding)
+export function closeParents(gh, projectId) {
   const closed = []
   let cursor = null
   do {
@@ -72,22 +72,28 @@ export function closeParents(gh, binding) {
 
 export function startIssue(gh, root, n, { prefix, retryDelayMs = 3000 } = {}) {
   const board = loadBoard(gh, root)
-  const closedParents = closeParents(gh, board.binding)
   const issue = viewIssue(gh, n)
-  setStatus(gh, board, addItem(gh, board.projectId, issue.id, retryDelayMs), 'In progress')
 
+  // Switch first: a failed switch (e.g. a dirty tree) must leave the board untouched.
   const pfx = prefix ?? (issue.labels.some((l) => l.name === 'bug') ? 'fix' : 'feat')
   const existing = git(root, 'branch', '--format=%(refname:short)')
     .split('\n')
     .find((b) => BRANCH_NUMBER.exec(b)?.[1] === String(n))
-  const branch = existing ?? `${pfx}/${n}-${slugify(issue.title)}`
-  if (existing) {
-    git(root, 'switch', branch)
-  } else {
-    const def = repoInfo(gh).defaultBranch
-    const base = gitOk(root, 'fetch', 'origin', def) !== null ? `origin/${def}` : def
-    git(root, 'switch', '-c', branch, '--no-track', base)
+  const branch = existing ?? `${pfx}/${n}-${slugify(issue.title, n)}`
+  try {
+    if (existing) {
+      git(root, 'switch', branch)
+    } else {
+      const def = repoInfo(gh).defaultBranch
+      const base = gitOk(root, 'fetch', 'origin', def) !== null ? `origin/${def}` : def
+      git(root, 'switch', '-c', branch, '--no-track', base)
+    }
+  } catch (e) {
+    throw new Error(`kanban: cannot switch to branch '${branch}': ${String(e.stderr || e.message).trim()}`)
   }
+
+  const closedParents = closeParents(gh, board.projectId)
+  setStatus(gh, board, addItem(gh, board.projectId, issue.id, retryDelayMs), 'In progress')
   return { branch, closedParents, issue: { title: issue.title, body: issue.body, url: issue.url } }
 }
 
@@ -103,7 +109,8 @@ export function openPr(gh, root, n, { title, draft = false, bodyFile, recheckMs 
   git(root, 'push', '-u', 'origin', 'HEAD')
   let url = null
   try {
-    url = gh.json(['pr', 'view', '--json', 'url']).url ?? null
+    const existingPr = gh.json(['pr', 'view', '--json', 'url,state'])
+    if (existingPr.state === 'OPEN') url = existingPr.url ?? null
   } catch {}
   if (!url) {
     const closes = `Closes #${n}`

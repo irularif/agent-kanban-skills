@@ -82,7 +82,7 @@ const FIELD_SELECT = '... on ProjectV2SingleSelectField { id name options { id n
 export const projectUrl = (repo, number) =>
   `https://github.com/${repo.ownerType === 'User' ? 'users' : 'orgs'}/${repo.owner}/projects/${number}`
 
-export function ensureBoard(gh, repo, { areas = [], collaborators = [], dryRun = false, binding = null } = {}) {
+export function ensureBoard(gh, repo, { areas, collaborators = [], dryRun = false, binding = null } = {}) {
   const defaults = loadDefaults()
   const created = []
 
@@ -116,6 +116,8 @@ export function ensureBoard(gh, repo, { areas = [], collaborators = [], dryRun =
     }
   }
   const fields = new Map(state.fields.map((f) => [f.name, f]))
+  // `check` passes no areas: trust the board's own Area options.
+  areas ??= (fields.get('Area')?.options ?? []).map((o) => o.name)
   const mutate = (query) => gh.graphql(query)
 
   // 2. link repo
@@ -129,6 +131,9 @@ export function ensureBoard(gh, repo, { areas = [], collaborators = [], dryRun =
   // 3. single-select fields
   const syncSelect = (name, desired, colorFor) => {
     const field = fields.get(name)
+    if (field && field.__typename !== 'ProjectV2SingleSelectField') {
+      throw new Error(`kanban: field ${name} exists but is not single-select`)
+    }
     if (!field) {
       if (!desired.length) {
         if (dryRun) return void created.push(`field ${name}`)
@@ -164,7 +169,11 @@ export function ensureBoard(gh, repo, { areas = [], collaborators = [], dryRun =
     created.push(`view ${view.name}`)
     if (dryRun) continue
     // Roadmap views reject visibleFieldIds, so only send a configuration when fields are listed.
-    const ids = (view.fields ?? []).map((n) => fields.get(n)?.id).filter(Boolean)
+    const ids = (view.fields ?? []).map((n) => {
+      const id = fields.get(n)?.id
+      if (!id) throw new Error(`kanban: view ${view.name}: field '${n}' not found on the board`)
+      return id
+    })
     const config = view.fields ? `, configuration: {visibleFieldIds: ${str(ids)}}` : ''
     mutate(
       `mutation { createProjectV2View(input: {projectId: ${str(projectId)}, name: ${str(view.name)}, layout: ${view.layout}${config}}) { projectV2View { id } } }`,

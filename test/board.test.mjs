@@ -222,3 +222,24 @@ test('no GraphQL document selects a connection without first/last', async () => 
     }
   }
 })
+
+test('a same-named field that is not single-select is an error', () => {
+  const state = fullState()
+  state.fields.nodes = state.fields.nodes.map((f) => (f.name === 'Area' ? plain('F_Area', 'Area') : f))
+  const gh = fakeGh(routes({ projects: [{ id: 'P_1', number: 3, title: 'sitakro' }], state, labels: fullLabels() }))
+  assert.throws(() => ensureBoard(gh, org, { areas: ['web', 'shared'], binding: { projectNumber: 3 } }), /^Error: kanban: field Area exists but is not single-select/)
+})
+
+test('a view field that does not resolve is an error', () => {
+  const state = fullState()
+  state.views = { nodes: [] }
+  state.fields.nodes = state.fields.nodes.filter((f) => f.name !== 'Parent issue')
+  const gh = fakeGh(routes({ projects: [{ id: 'P_1', number: 3, title: 'sitakro' }], state, labels: fullLabels() }))
+  assert.throws(() => ensureBoard(gh, org, { areas: ['web', 'shared'], binding: { projectNumber: 3 } }), /^Error: kanban: .*Parent issue/)
+})
+
+test('without explicit areas the Area options drive the label check', () => {
+  const gh = fakeGh(routes({ projects: [{ id: 'P_1', number: 3, title: 'sitakro' }], state: fullState(), labels: ['bug', 'finding'] }))
+  const r = ensureBoard(gh, org, { dryRun: true, binding: { projectNumber: 3 } })
+  assert.deepEqual(r.created, ['label area:web', 'label area:shared'])
+})

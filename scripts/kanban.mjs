@@ -1,13 +1,14 @@
 #!/usr/bin/env node
 import { readFileSync, realpathSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
+import { join } from 'node:path'
 import { parseArgs } from 'node:util'
 import { GhError, createGh, repoInfo, repoRoot } from './lib/gh.mjs'
 import { bindingChanged, readBinding, writeBinding } from './lib/binding.mjs'
 import { ensureBoard } from './lib/board.mjs'
 import { writeRepoFiles } from './lib/repo-files.mjs'
 import { installHooks } from './lib/hooks.mjs'
-import { addIssues } from './lib/issues.mjs'
+import { addIssues, findProjectId } from './lib/issues.mjs'
 import { closeParents, openPr, startIssue } from './lib/work.mjs'
 
 const USAGE = `Usage: kanban.mjs <command> [options]
@@ -95,13 +96,15 @@ function addIssuesCommand(args) {
     throw new Error(`kanban: cannot read ${positionals[0]}: ${e.message}`)
   }
   const dryRun = values['dry-run'] ?? false
+  const sourcePath = join(root, plan.source ?? '')
+  const before = dryRun ? null : readFileSync(sourcePath, 'utf8')
   const r = addIssues(createGh({ cwd: root }), root, plan, { dryRun })
   if (dryRun) {
     console.log(`Would create: ${r.planned.length ? r.planned.join(', ') : 'nothing (all issues exist)'}`)
   } else {
     console.log(`Created: ${r.created.length ? r.created.map((n) => `#${n}`).join(', ') : 'nothing'}`)
     console.log(`Parent: #${r.parent}`)
-    console.log(`Update recorded in ${plan.source}; commit it.`)
+    if (readFileSync(sourcePath, 'utf8') !== before) console.log(`Update recorded in ${plan.source}; commit it.`)
   }
   if (r.existing.length) console.log(`Already existed: ${r.existing.map((n) => `#${n}`).join(', ')}`)
   return 0
@@ -151,7 +154,8 @@ function pr(args) {
 function closeParentsCommand(args) {
   parseArgs({ args, options: {} })
   const root = requireBinding()
-  const closed = closeParents(createGh({ cwd: root }), readBinding(root))
+  const gh = createGh({ cwd: root })
+  const closed = closeParents(gh, findProjectId(gh, readBinding(root)))
   console.log(closed.length ? `Closed: ${closed.map((n) => `#${n}`).join(', ')}` : 'Closed: nothing')
   return 0
 }
@@ -174,7 +178,8 @@ export async function main(argv = process.argv.slice(2), { commands: table = com
   try {
     return (await table[cmd](rest)) ?? 0
   } catch (e) {
-    console.error(e.message.startsWith('kanban:') ? e.message : `kanban: ${e.message}`)
+    const msg = e instanceof Error ? e.message : String(e)
+    console.error(msg.startsWith('kanban:') ? msg : `kanban: ${msg}`)
     return e instanceof GhError ? 2 : 1
   }
 }

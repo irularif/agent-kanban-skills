@@ -140,3 +140,20 @@ test('pre-push silent when gh auth fails', () => {
   assert.equal(r.status, 0)
   assert.equal(r.stderr, '')
 })
+
+test('pre-push is bounded to a few seconds without timeout(1) and stays silent', async () => {
+  const { symlinkSync } = await import('node:fs')
+  const bin = tmp()
+  for (const name of ['sh', 'git', 'sed', 'head', 'wc', 'tr', 'grep', 'cat', 'rm', 'mktemp', 'sleep', 'dirname', 'basename']) {
+    const p = spawnSync('sh', ['-c', `command -v ${name}`], { encoding: 'utf8' }).stdout.trim()
+    if (p) symlinkSync(p, join(bin, name))
+  }
+  const ghDir = tmp()
+  writeFileSync(join(ghDir, 'gh'), '#!/bin/sh\n[ "$1" = auth ] && exit 0\nsleep 10\n')
+  chmodSync(join(ghDir, 'gh'), 0o755)
+  const started = Date.now()
+  const r = run(pushRepo(), ['pre-push'], { path: `${ghDir}:${bin}` })
+  assert.ok(Date.now() - started < 8000, `took ${Date.now() - started}ms`)
+  assert.equal(r.status, 0)
+  assert.equal(r.stderr, '')
+})

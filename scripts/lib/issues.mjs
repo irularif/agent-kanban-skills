@@ -32,17 +32,15 @@ const blockBody = (map, pending) =>
   [`${MAP_PREFIX} ${str(map)}`, ...(pending.length ? [`${PENDING_PREFIX} ${str(pending)}`] : [])].join('\n')
 
 export function findProjectId(gh, binding) {
-  const nodes =
-    gh.graphql(
-      `query($login: String!) {
-        repositoryOwner(login: $login) {
-          ... on ProjectV2Owner { projectsV2(first: 100) { nodes { id number } } }
-        }
-      }`,
-      { login: binding.owner },
-    ).repositoryOwner?.projectsV2?.nodes ?? []
-  const project = nodes.find((p) => p.number === binding.projectNumber)
-  if (!project) throw new Error(`kanban: project #${binding.projectNumber} not found; run /init-kanban`)
+  const project = gh.graphql(
+    `query($login: String!, $n: Int!) {
+      repositoryOwner(login: $login) {
+        ... on ProjectV2Owner { projectV2(number: $n) { id } }
+      }
+    }`,
+    { login: binding.owner, n: binding.projectNumber },
+  ).repositoryOwner?.projectV2
+  if (!project?.id) throw new Error(`kanban: project #${binding.projectNumber} not found; run /init-kanban`)
   return project.id
 }
 
@@ -152,6 +150,11 @@ export function addIssues(gh, root, plan, { dryRun = false, retryDelayMs = 3000 
       }
     }
     pending.delete(it.key)
+    save()
+  }
+
+  if (rewire.length) {
+    for (const it of rewire) pending.add(it.key)
     save()
   }
 

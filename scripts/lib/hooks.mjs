@@ -1,7 +1,7 @@
 import { chmodSync, copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { spawnSync } from 'node:child_process'
-import { homedir } from 'node:os'
-import { dirname, isAbsolute, join, relative, resolve } from 'node:path'
+import { homedir, userInfo } from 'node:os'
+import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { upsertBlock } from './markers.mjs'
 
@@ -44,9 +44,12 @@ export function installHooks(root, { dryRun = false } = {}) {
   }
 
   if (mech.kind === 'hooksPath') {
-    const abs = resolve(root, mech.dir.replace(/^~(?=$|\/)/, homedir()))
-    const rel = relative(resolve(root), abs)
-    if (rel === '' || rel.startsWith('..') || isAbsolute(rel)) {
+    // ~ and ~<current user> expand to the home directory; ~<other user> cannot be resolved here.
+    const tilde = /^~([^/]*)(\/.*)?$/.exec(mech.dir)
+    const foreign = tilde && tilde[1] !== '' && tilde[1] !== userInfo().username
+    const abs = resolve(root, tilde && !foreign ? homedir() + (tilde[2] ?? '') : mech.dir)
+    const rel = foreign ? '..' : relative(resolve(root), abs)
+    if (rel === '' || rel.split(sep)[0] === '..' || isAbsolute(rel)) {
       return {
         changed: [],
         manual: [

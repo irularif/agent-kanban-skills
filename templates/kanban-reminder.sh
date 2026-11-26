@@ -8,6 +8,25 @@ default=$(git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null | sed 's
 [ -n "$default" ] || default=main
 [ "$branch" = "$default" ] && exit 0
 
+# Bound a command to ~5 s: timeout(1) when present, else a POSIX background job plus a watchdog.
+bounded() {
+  if command -v timeout >/dev/null 2>&1; then
+    timeout 5 "$@"
+    return $?
+  fi
+  tmp=$(mktemp 2>/dev/null) || return 1
+  "$@" >"$tmp" 2>/dev/null &
+  pid=$!
+  ( sleep 5; kill "$pid" ) >/dev/null 2>&1 &
+  dog=$!
+  wait "$pid" 2>/dev/null
+  rc=$?
+  kill "$dog" >/dev/null 2>&1
+  cat "$tmp"
+  rm -f "$tmp"
+  return $rc
+}
+
 num=$(printf '%s\n' "$branch" | sed -n -E 's#^[a-z]+/([0-9]+)-.*#\1#p')
 
 case "$1" in
@@ -26,9 +45,7 @@ case "$1" in
   pre-push)
     [ -n "$num" ] || exit 0
     command -v gh >/dev/null 2>&1 || exit 0
-    run=""
-    command -v timeout >/dev/null 2>&1 && run="timeout 5"
-    $run gh auth status >/dev/null 2>&1 || exit 0
+    bounded gh auth status >/dev/null 2>&1 || exit 0
     root=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0
     file="$root/.github/kanban.json"
     [ -f "$file" ] || exit 0
@@ -40,7 +57,7 @@ case "$1" in
     [ -n "$owner" ] && [ -n "$name" ] && [ "$owner" != "$slug" ] || exit 0
     query='query($o:String!,$r:String!,$n:Int!){repository(owner:$o,name:$r){issue(number:$n){projectItems(first:20){nodes{project{number} fieldValueByName(name:"Status"){... on ProjectV2ItemFieldSingleSelectValue{name}}}}}}}'
     filter=".data.repository.issue.projectItems.nodes[] | select(.project.number == $project) | .fieldValueByName.name // empty"
-    status=$($run gh api graphql -f query="$query" -f o="$owner" -f r="$name" -F n="$num" --jq "$filter" 2>/dev/null) || exit 0
+    status=$(bounded gh api graphql -f query="$query" -f o="$owner" -f r="$name" -F n="$num" --jq "$filter" 2>/dev/null) || exit 0
     status=$(printf '%s\n' "$status" | head -n 1)
     case "$status" in
       "In progress" | "In review") exit 0 ;;

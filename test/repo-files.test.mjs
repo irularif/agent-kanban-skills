@@ -94,3 +94,19 @@ test('contributing text says /init-kanban installs hooks and describes the real 
     assert.match(text, /In progress/)
   }
 })
+
+test('managed form detection accepts CRLF', () => {
+  const root = tmp()
+  mkdirSync(join(root, '.github/ISSUE_TEMPLATE'), { recursive: true })
+  writeFileSync(join(root, '.github/ISSUE_TEMPLATE/bug.yml'), '# kanban:managed\r\nold\r\n')
+  const r = writeRepoFiles(root, binding, opts)
+  assert.deepEqual(r.warnings, [])
+  assert.ok(r.changed.includes('.github/ISSUE_TEMPLATE/bug.yml'))
+})
+
+test('missing binding url is an error unless dry-run', () => {
+  for (const url of ['', undefined, null]) {
+    assert.throws(() => writeRepoFiles(tmp(), { ...binding, url }, opts), /^Error: kanban: .*url/)
+  }
+  assert.doesNotThrow(() => writeRepoFiles(tmp(), { ...binding, url: null }, { ...opts, dryRun: true }))
+})

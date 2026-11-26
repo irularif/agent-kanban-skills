@@ -122,3 +122,20 @@ test('plain existing hook gives no manual note', () => {
   writeFileSync(join(root, '.githooks/pre-push'), '#!/bin/sh\necho old\n')
   assert.deepEqual(installHooks(root).manual, [])
 })
+
+test('~otheruser hooksPath is treated as outside the repo', () => {
+  const root = gitRepo()
+  git(root, 'config', 'core.hooksPath', '~nosuchuser-xyz/hooks')
+  const r = installHooks(root)
+  assert.deepEqual(r.changed, [])
+  assert.match(r.manual[0], /outside this repo/)
+})
+
+test('a ..foo hooks directory inside the repo counts as inside', () => {
+  const root = gitRepo()
+  git(root, 'config', 'core.hooksPath', '..hooks')
+  const r = installHooks(root)
+  assert.deepEqual(r.manual, [])
+  assert.ok(r.changed.includes('..hooks/pre-push'))
+  assert.ok(existsSync(join(root, '..hooks/kanban-reminder.sh')))
+})

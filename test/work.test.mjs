@@ -13,7 +13,7 @@ const git = (cwd, ...args) => execFileSync('git', args, { cwd, encoding: 'utf8' 
 function repo() {
   const root = mkdtempSync(join(tmpdir(), 'work-'))
   mkdirSync(join(root, '.github'))
-  writeFileSync(join(root, '.github', 'kanban.json'), JSON.stringify({ owner: 'ksatu', projectNumber: 3 }))
+  writeFileSync(join(root, '.github', 'kanban.json'), JSON.stringify({ owner: 'ksatu', projectNumber: 3, url: 'https://github.com/orgs/ksatu/projects/3' }))
   git(root, 'init', '-q', '-b', 'main')
   git(root, 'config', 'user.email', 't@t')
   git(root, 'config', 'user.name', 't')
@@ -26,7 +26,7 @@ function board({ title = 'Perbaiki Login: CSRF!', labels = [], parents = [], sta
   const gh = fakeGh([
     [(a) => a[0] === 'repo' && a[1] === 'view', { owner: { login: 'ksatu' }, name: 'sitakro', id: 'R_1', defaultBranchRef: { name: 'main' } }],
     [q(/repositoryOwner\(login: \$login\) \{ id/), { repositoryOwner: { id: 'O_1', __typename: 'Organization' } }],
-    [q(/projectsV2/), { repositoryOwner: { projectsV2: { nodes: [{ id: 'P_1', number: 3 }] } } }],
+    [q(/projectV2\(number/), { repositoryOwner: { projectV2: { id: 'P_1' } } }],
     [q(/fields\(first/), {
       node: {
         fields: {
@@ -178,8 +178,7 @@ const parent = (number, states, state = 'OPEN') => ({
 
 test('closeParents closes parents whose sub-issues are all closed', () => {
   const { gh } = board({ parents: [parent(1, ['CLOSED', 'CLOSED']), parent(2, ['CLOSED', 'OPEN']), parent(3, []), parent(4, ['CLOSED'], 'CLOSED')] })
-  const binding = { owner: 'ksatu', projectNumber: 3 }
-  assert.deepEqual(closeParents(gh, binding), [1])
+  assert.deepEqual(closeParents(gh, 'P_1'), [1])
   const close = calls(gh, /^issue close/)
   assert.equal(close.length, 1)
   assert.match(close[0].join(' '), /issue close 1 .*All sub-issues are done\./)
@@ -225,9 +224,58 @@ test('openPr without body file uses Closes only', () => {
 test('openPr reuses an existing PR and still sets In review', () => {
   const { gh } = board()
   const orig = gh.run
-  gh.json = (a) => (a[0] === 'pr' && a[1] === 'view' ? (gh.calls.push(a), { url: 'https://github.com/ksatu/sitakro/pull/49' }) : orig(a))
+  gh.json = (a) => (a[0] === 'pr' && a[1] === 'view' ? (gh.calls.push(a), { url: 'https://github.com/ksatu/sitakro/pull/49', state: 'OPEN' }) : orig(a))
   const r = openPr(gh, prRepo(), 12, { recheckMs: 0, retryDelayMs: 0 })
   assert.equal(r.url, 'https://github.com/ksatu/sitakro/pull/49')
   assert.equal(calls(gh, /^pr create/).length, 0)
   assert.match(calls(gh, /updateProjectV2ItemFieldValue/)[0].join(' '), /S_In review/)
+})
+
+test('openPr creates a new PR when the existing one is not OPEN', () => {
+  for (const state of ['CLOSED', 'MERGED']) {
+    const { gh } = board()
+    const orig = gh.run
+    gh.json = (a) => (a[0] === 'pr' && a[1] === 'view' ? (gh.calls.push(a), { url: 'https://github.com/ksatu/sitakro/pull/49', state }) : orig(a))
+    const r = openPr(gh, prRepo(), 12, { recheckMs: 0, retryDelayMs: 0 })
+    assert.equal(r.url, 'https://github.com/ksatu/sitakro/pull/50')
+    assert.equal(calls(gh, /^pr create/).length, 1)
+    assert.ok(calls(gh, /^pr view/).every((c) => c.includes('url,state')))
+  }
+})
+
+test('startIssue strips a conventional-commit prefix from the slug', () => {
+  const { gh } = board({ title: 'chore: pasang papan' })
+  assert.equal(startIssue(gh, repo(), 236, { prefix: 'chore', retryDelayMs: 0 }).branch, 'chore/236-pasang-papan')
+  const b2 = board({ title: 'feat(web)!: Halaman Baru' })
+  assert.equal(startIssue(b2.gh, repo(), 7, { retryDelayMs: 0 }).branch, 'feat/7-halaman-baru')
+})
+
+test('startIssue falls back to issue-<n> for an empty slug and never ends with a dash', () => {
+  assert.equal(startIssue(board({ title: '!!!' }).gh, repo(), 5, { retryDelayMs: 0 }).branch, 'feat/5-issue-5')
+  assert.equal(startIssue(board({ title: 'fix: ???' }).gh, repo(), 6, { retryDelayMs: 0 }).branch, 'feat/6-issue-6')
+  const t = 'a'.repeat(39) + ' bbbbbb'
+  const slug = startIssue(board({ title: t }).gh, repo(), 8, { retryDelayMs: 0 }).branch.replace('feat/8-', '')
+  assert.ok(!slug.endsWith('-'), slug)
+})
+
+test('startIssue leaves the board untouched when the branch switch fails', () => {
+  const root = repo()
+  writeFileSync(join(root, 'f.txt'), '1')
+  git(root, 'add', '.')
+  git(root, 'commit', '-q', '-m', 'f')
+  git(root, 'switch', '-q', '-c', 'feat/12-lama')
+  writeFileSync(join(root, 'f.txt'), '2')
+  git(root, 'commit', '-q', '-am', 'change')
+  git(root, 'switch', '-q', 'main')
+  writeFileSync(join(root, 'f.txt'), 'dirty')
+  const { gh } = board({ parents: [{ number: 9, state: 'OPEN', subIssues: { nodes: [{ state: 'CLOSED' }] }, subIssuesSummary: { total: 1 } }] })
+  assert.throws(() => startIssue(gh, root, 12, { retryDelayMs: 0 }), /^Error: kanban: /)
+  assert.equal(calls(gh, /^issue close|addProjectV2ItemById|updateProjectV2ItemFieldValue/).length, 0)
+})
+
+test('startIssue looks the project up once per command', () => {
+  const { gh } = board()
+  startIssue(gh, repo(), 12, { retryDelayMs: 0 })
+  assert.equal(calls(gh, /projectV2\(number/).length, 1)
+  assert.equal(calls(gh, /projectsV2/).length, 0)
 })

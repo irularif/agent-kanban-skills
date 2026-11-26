@@ -29,12 +29,13 @@ function section(text, language) {
 export function writeRepoFiles(root, binding, { areas = [], language = 'en', dryRun = false } = {}) {
   const changed = []
   const warnings = []
+  if (!dryRun && !binding.url) throw new Error('kanban: binding has no url; run /init-kanban to bind the board')
   const project = `${binding.owner}/${binding.projectNumber}`
 
   for (const name of FORMS) {
     const rel = `.github/ISSUE_TEMPLATE/${name}`
     const existing = read(join(root, rel))
-    if (existing !== null && !existing.startsWith(`${MANAGED}\n`)) {
+    if (existing !== null && !/^# kanban:managed\r?\n/.test(existing)) {
       warnings.push(`${rel} exists without '${MANAGED}'; left unchanged. Add the label and project to it by hand.`)
       continue
     }

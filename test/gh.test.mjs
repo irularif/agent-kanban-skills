@@ -39,5 +39,21 @@ test('graphql types vars: strings via -f, numbers/booleans via -F', () => {
   const gh = createGh({ exec: (_c, a) => { args = a; return { status: 0, stdout: '{"data":{}}', stderr: '' } } })
   gh.graphql('q', { id: '98236657', n: 3, ok: true })
   assert.deepEqual(args.slice(4), ['-f', 'id=98236657', '-F', 'n=3', '-F', 'ok=true'])
-  assert.throws(() => gh.graphql('q', { o: {} }), /must be scalar/)
+  assert.throws(() => gh.graphql('q', { o: {} }), /graphql var o must be a string/)
+})
+
+test('graphql rejects NaN, Infinity, null and undefined vars with a kanban error', () => {
+  const gh = createGh({ exec: () => ({ status: 0, stdout: '{"data":{}}', stderr: '' }) })
+  for (const v of [Number.NaN, Infinity, null, undefined]) {
+    assert.throws(() => gh.graphql('q', { k: v }), (e) => e instanceof GhError && /^kanban: graphql var k /.test(e.message))
+  }
+})
+
+test('repoInfo throws a kanban error for an unknown owner', async () => {
+  const { repoInfo } = await import('../scripts/lib/gh.mjs')
+  const gh = fakeGh([
+    [(a) => a[0] === 'repo', { owner: { login: 'ghost' }, name: 'r', id: 'R', defaultBranchRef: null }],
+    [(a) => a[1] === 'graphql', { repositoryOwner: null }],
+  ])
+  assert.throws(() => repoInfo(gh), /^Error: kanban: .*ghost/)
 })

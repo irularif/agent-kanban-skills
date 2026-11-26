@@ -13,13 +13,13 @@ const q = (re) => (a) => a[1] === 'graphql' && re.test(a[2])
 function setup({ source = '# Plan\n', failCreateAt = null, conflicts = 0, start = 100, alreadyInBoard = false, failAddSub = false, addSubMessage = 'nope' } = {}) {
   const root = mkdtempSync(join(tmpdir(), 'issues-'))
   mkdirSync(join(root, '.github'))
-  writeFileSync(join(root, '.github', 'kanban.json'), JSON.stringify({ owner: 'ksatu', projectNumber: 3 }))
+  writeFileSync(join(root, '.github', 'kanban.json'), JSON.stringify({ owner: 'ksatu', projectNumber: 3, url: 'https://github.com/orgs/ksatu/projects/3' }))
   writeFileSync(join(root, 'plan.md'), source)
   let next = start
   let conflictsLeft = conflicts
   let creates = 0
   const gh = fakeGh([
-    [q(/projectsV2/), { repositoryOwner: { projectsV2: { nodes: [{ id: 'P_1', number: 3, title: 'sitakro' }] } } }],
+    [q(/projectV2\(number/), { repositoryOwner: { projectV2: { id: 'P_1' } } }],
     [q(/fields\(first/), {
       node: {
         fields: {
@@ -217,4 +217,19 @@ test('add-issues with Auto-add already holding the items leaves nothing pending 
   assert.doesNotMatch(readFileSync(join(root, 'plan.md'), 'utf8'), /kanban-pending/)
   const upd = withGql(gh, /updateProjectV2ItemFieldValue/).map((a) => a[2])
   assert.ok(upd.length >= 4 && upd.every((m) => m.includes('"ITEM_auto"')))
+})
+
+test('units re-linked because the parent is new are recorded as pending before wiring', () => {
+  const source = `# Plan\n\n${S}\nkanban-issues: {"u1":102}\n${E}\n`
+  const { root, gh } = setup({ source, start: 102, failAddSub: true })
+  assert.throws(() => addIssues(gh, root, plan([u('u1')]), opts), /nope/)
+  const text = readFileSync(join(root, 'plan.md'), 'utf8')
+  assert.match(text, /kanban-pending: \[[^\]]*"u1"/)
+})
+
+test('project is looked up by number, once', () => {
+  const { root, gh } = setup()
+  addIssues(gh, root, plan([u('u1')]), opts)
+  assert.equal(withGql(gh, /projectV2\(number/).length, 1)
+  assert.equal(withGql(gh, /projectsV2/).length, 0)
 })
