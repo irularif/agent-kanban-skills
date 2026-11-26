@@ -62,6 +62,7 @@ test('fresh org repo creates everything', () => {
   assert.match(views[1], /TABLE_LAYOUT/)
   assert.match(views[1], /visibleFieldIds: \["F_t","F_status","F_p","F_s","F_Area","F_Size"\]/)
   assert.match(views[2], /ROADMAP_LAYOUT/)
+  assert.doesNotMatch(views[2], /visibleFieldIds/)
   const labels = t.filter((x) => /^label create/.test(x))
   assert.deepEqual(labels.map((l) => l.split(' ')[2]), ['bug', 'finding', 'area:web', 'area:shared'])
   assert.deepEqual(r.binding, { owner: 'ksatu', projectNumber: 7, url: 'https://github.com/orgs/ksatu/projects/7' })

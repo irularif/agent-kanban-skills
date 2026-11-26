@@ -163,9 +163,11 @@ export function ensureBoard(gh, repo, { areas = [], collaborators = [], dryRun =
     if (haveViews.has(view.name)) continue
     created.push(`view ${view.name}`)
     if (dryRun) continue
-    const ids = view.fields.map((n) => fields.get(n)?.id).filter(Boolean)
+    // Roadmap views reject visibleFieldIds, so only send a configuration when fields are listed.
+    const ids = (view.fields ?? []).map((n) => fields.get(n)?.id).filter(Boolean)
+    const config = view.fields ? `, configuration: {visibleFieldIds: ${str(ids)}}` : ''
     mutate(
-      `mutation { createProjectV2View(input: {projectId: ${str(projectId)}, name: ${str(view.name)}, layout: ${view.layout}, configuration: {visibleFieldIds: ${str(ids)}}}) { projectV2View { id } } }`,
+      `mutation { createProjectV2View(input: {projectId: ${str(projectId)}, name: ${str(view.name)}, layout: ${view.layout}${config}}) { projectV2View { id } } }`,
     )
   }
 

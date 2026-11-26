@@ -13,6 +13,6 @@
       "layout": "TABLE_LAYOUT",
       "fields": ["Title", "Status", "Parent issue", "Sub-issues progress", "Area", "Size"]
     },
-    { "name": "Roadmap", "layout": "ROADMAP_LAYOUT", "fields": ["Status", "Area"] }
+    { "name": "Roadmap", "layout": "ROADMAP_LAYOUT" }
   ]
 }
