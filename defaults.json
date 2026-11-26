@@ -1,0 +1,18 @@
+{
+  "status": ["Triage", "Backlog", "Ready", "In progress", "In review", "Done"],
+  "size": ["S", "M", "L"],
+  "labels": [
+    { "name": "bug", "color": "d73a4a", "description": "Something is not working" },
+    { "name": "finding", "color": "fbca04", "description": "Review finding to triage" }
+  ],
+  "areaLabel": { "color": "0e8a16", "description": "Area of the codebase" },
+  "views": [
+    { "name": "Board", "layout": "BOARD_LAYOUT", "fields": ["Status", "Area", "Size"] },
+    {
+      "name": "By epic",
+      "layout": "TABLE_LAYOUT",
+      "fields": ["Title", "Status", "Parent issue", "Sub-issues progress", "Area", "Size"]
+    },
+    { "name": "Roadmap", "layout": "ROADMAP_LAYOUT", "fields": ["Status", "Area"] }
+  ]
+}
