@@ -75,8 +75,11 @@ function validate(plan, items, fields) {
   }
   for (const it of items) {
     const where = `'${it.key}'`
+    for (const f of ['title', 'body']) {
+      if (typeof it[f] !== 'string' || !it[f].trim()) throw new Error(`kanban: ${f} is required for ${where}`)
+    }
     if (it.area !== undefined && fields.Area?.options[it.area] === undefined) {
-      throw new Error(`kanban: unknown area '${it.area}' for ${where}`)
+      throw new Error(`kanban: unknown area '${it.area}' for ${where} (valid: ${Object.keys(fields.Area?.options ?? {}).join(', ')})`)
     }
     if (it.size !== undefined && !SIZES.includes(it.size)) {
       throw new Error(`kanban: invalid size '${it.size}' for ${where} (use S, M or L)`)
@@ -95,7 +98,7 @@ export function addIssues(gh, root, plan, { dryRun = false, retryDelayMs = 3000 
   const { map, pending: savedPending } = readState(text)
   const pending = new Set(savedPending)
 
-  const parent = plan.parent
+  const parent = { status: 'Ready', ...plan.parent }
   const items = [parent, ...(plan.units ?? []).map((x) => ({ status: 'Ready', ...x }))]
   const projectId = findProjectId(gh, binding)
   const fields = fieldIds(gh, projectId)
@@ -129,9 +132,13 @@ export function addIssues(gh, root, plan, { dryRun = false, retryDelayMs = 3000 
     if (it.area) setField(itemId, 'Area', it.area)
     if (it.size) setField(itemId, 'Size', it.size)
     if (it !== parent) {
-      gh.graphql(
-        `mutation { addSubIssue(input: {issueId: ${str(nodeId(result.parent))}, subIssueId: ${str(id)}}) { issue { id } } }`,
-      )
+      try {
+        gh.graphql(
+          `mutation { addSubIssue(input: {issueId: ${str(nodeId(result.parent))}, subIssueId: ${str(id)}}) { issue { id } } }`,
+        )
+      } catch (e) {
+        if (!/already/i.test(e.message)) throw e
+      }
     }
     pending.delete(it.key)
     save()

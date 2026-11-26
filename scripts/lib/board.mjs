@@ -88,9 +88,11 @@ export function ensureBoard(gh, repo, { areas = [], collaborators = [], dryRun =
 
   // 1. project
   const projects = gh.graphql(PROJECT_LIST, { login: repo.owner }).repositoryOwner?.projectsV2?.nodes ?? []
-  let project =
-    (binding?.projectNumber != null && projects.find((p) => p.number === binding.projectNumber)) ||
-    projects.find((p) => p.title === repo.name)
+  let project = binding?.projectNumber != null ? projects.find((p) => p.number === binding.projectNumber) : null
+  if (!project) {
+    project = projects.find((p) => p.title === repo.name)
+    if (project) created.push(`Using existing project #${project.number} '${project.title}'`)
+  }
   if (!project) {
     created.push('project')
     if (!dryRun) {
@@ -168,20 +170,20 @@ export function ensureBoard(gh, repo, { areas = [], collaborators = [], dryRun =
   }
 
   // 5. labels
-  const have = new Set(gh.json(['label', 'list', '--limit', '1000', '--json', 'name']).map((l) => l.name))
+  const have = new Set(gh.json(['label', 'list', '--limit', '1000', '--json', 'name']).map((l) => l.name.toLowerCase()))
   const wanted = [
     ...defaults.labels,
     ...areas.map((a) => ({ name: `area:${a}`, ...defaults.areaLabel })),
   ]
   for (const l of wanted) {
-    if (have.has(l.name)) continue
+    if (have.has(l.name.toLowerCase())) continue
     created.push(`label ${l.name}`)
     if (!dryRun) gh.run(['label', 'create', l.name, '--color', l.color, '--description', l.description])
   }
 
-  // 6. collaborators
+  // 6. collaborators. ProjectV2 exposes no readable collaborators, so the role is applied every run
+  // and never reported as created. Callers must not pass a lower role than the user already has.
   if (collaborators.length) {
-    created.push(...collaborators.map((c) => `collaborator ${c.login}:${c.role}`))
     if (!dryRun) {
       const entries = collaborators.map((c) => {
         const role = ROLES[c.role]

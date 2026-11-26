@@ -3,7 +3,7 @@ import { readFileSync, realpathSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { parseArgs } from 'node:util'
 import { GhError, createGh, repoInfo, repoRoot } from './lib/gh.mjs'
-import { readBinding, writeBinding } from './lib/binding.mjs'
+import { bindingChanged, readBinding, writeBinding } from './lib/binding.mjs'
 import { ensureBoard } from './lib/board.mjs'
 import { writeRepoFiles } from './lib/repo-files.mjs'
 import { installHooks } from './lib/hooks.mjs'
@@ -46,18 +46,15 @@ function init(args) {
   const root = repoRoot()
   const gh = createGh({ cwd: root })
   const r = ensureBoard(gh, repoInfo(gh), { areas, collaborators, dryRun, binding: readBinding(root) })
-  let files = { changed: [], warnings: [] }
-  if (!dryRun) {
-    writeBinding(root, r.binding)
-    files = writeRepoFiles(root, r.binding, { areas, language: values.language })
-    files.changed.unshift('.github/kanban.json')
-    const hooks = installHooks(root)
-    files.changed.push(...hooks.changed)
-    r.manual.push(...hooks.manual)
-  }
+  const bindingChanged = dryRun ? bindingChanged(root, r.binding) : writeBinding(root, r.binding)
+  const files = writeRepoFiles(root, r.binding, { areas, language: values.language, dryRun })
+  if (bindingChanged) files.changed.unshift('.github/kanban.json')
+  const hooks = installHooks(root, { dryRun })
+  files.changed.push(...hooks.changed)
+  r.manual.push(...hooks.manual)
   console.log(`${dryRun ? 'Would create' : 'Created'}: ${r.created.length ? r.created.join(', ') : 'nothing (board up to date)'}`)
   if (r.binding.url) console.log(`Board: ${r.binding.url}`)
-  if (files.changed.length) console.log(`Files written:\n${files.changed.map((f) => `  - ${f}`).join('\n')}`)
+  if (files.changed.length) console.log(`${dryRun ? 'Would write' : 'Files written'}:\n${files.changed.map((f) => `  - ${f}`).join('\n')}`)
   for (const w of files.warnings) console.log(`Warning: ${w}`)
   if (r.manual.length) console.log(`Manual steps:\n${r.manual.map((m) => `  - ${m}`).join('\n')}`)
   if (!dryRun) console.log('Review and commit the files above.')
@@ -141,12 +138,12 @@ function start(args) {
 function pr(args) {
   const { values, positionals } = parseArgs({
     args,
-    options: { title: { type: 'string' }, draft: { type: 'boolean' } },
+    options: { title: { type: 'string' }, draft: { type: 'boolean' }, 'body-file': { type: 'string' } },
     allowPositionals: true,
   })
-  const n = issueNumber(positionals, 'pr <n> [--title <title>] [--draft]')
+  const n = issueNumber(positionals, 'pr <n> [--title <title>] [--draft] [--body-file <path>]')
   const root = requireBinding()
-  const r = openPr(createGh({ cwd: root }), root, n, { title: values.title, draft: values.draft })
+  const r = openPr(createGh({ cwd: root }), root, n, { title: values.title, draft: values.draft, bodyFile: values['body-file'] })
   console.log(`PR: ${r.url}`)
   return 0
 }

@@ -25,3 +25,11 @@ test('malformed JSON throws', () => {
   writeFileSync(join(d, '.github', 'kanban.json'), '{nope')
   assert.throws(() => readBinding(d), /kanban\.json/)
 })
+
+test('writeBinding reports whether content changed', () => {
+  const d = tmp()
+  const b = { owner: 'o', projectNumber: 1, url: 'u' }
+  assert.equal(writeBinding(d, b), true)
+  assert.equal(writeBinding(d, b), false)
+  assert.equal(writeBinding(d, { ...b, projectNumber: 2 }), true)
+})

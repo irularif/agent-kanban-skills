@@ -24,7 +24,7 @@ export function detectHookMechanism(root) {
 const snippet = () =>
   HOOKS.map((h) => `${h}: run  sh <path-to>/kanban-reminder.sh ${h} "$@" || true`).join('\n    ')
 
-export function installHooks(root) {
+export function installHooks(root, { dryRun = false } = {}) {
   const mech = detectHookMechanism(root)
   if (mech.kind === 'lefthook') {
     return {
@@ -58,23 +58,30 @@ export function installHooks(root) {
   }
 
   const changed = []
+  const manual = []
   const touch = (rel, text, copyFrom) => {
     const path = join(root, rel)
     const before = existsSync(path) ? readFileSync(path, 'utf8') : null
     const next = copyFrom ? readFileSync(copyFrom, 'utf8') : text
     if (before !== next) {
-      mkdirSync(dirname(path), { recursive: true })
-      writeFileSync(path, next)
+      if (!dryRun) {
+        mkdirSync(dirname(path), { recursive: true })
+        writeFileSync(path, next)
+      }
       changed.push(rel)
     }
-    chmodSync(path, 0o755)
+    if (!dryRun) chmodSync(path, 0o755)
   }
   touch(`${mech.dir}/kanban-reminder.sh`, null, reminder)
   for (const hook of HOOKS) {
     const rel = `${mech.dir}/${hook}`
     const path = join(root, rel)
-    const current = existsSync(path) ? readFileSync(path, 'utf8') : '#!/bin/sh\n'
+    const exists = existsSync(path)
+    const current = exists ? readFileSync(path, 'utf8') : '#!/bin/sh\n'
+    if (exists && !current.includes('# kanban:start') && /^\s*(exit|exec)\b/m.test(current)) {
+      manual.push(`${rel} has an exit or exec line, so the appended kanban reminder may never run. Move the block above it by hand.`)
+    }
     touch(rel, upsertBlock(current, blockFor(hook), 'sh'))
   }
-  return { changed, manual: [] }
+  return { changed, manual }
 }

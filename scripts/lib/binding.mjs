@@ -1,6 +1,8 @@
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 
+export const bindingText = (binding) => `${JSON.stringify(binding, null, 2)}\n`
+
 const bindingPath = (root) => join(root, '.github', 'kanban.json')
 
 export function readBinding(root) {
@@ -20,6 +22,21 @@ export function readBinding(root) {
 
 export function writeBinding(root, binding) {
   const path = bindingPath(root)
+  const next = bindingText(binding)
+  let before = null
+  try {
+    before = readFileSync(path, 'utf8')
+  } catch {}
+  if (before === next) return false
   mkdirSync(dirname(path), { recursive: true })
-  writeFileSync(path, `${JSON.stringify(binding, null, 2)}\n`)
+  writeFileSync(path, next)
+  return true
+}
+
+export function bindingChanged(root, binding) {
+  try {
+    return readFileSync(bindingPath(root), 'utf8') !== bindingText(binding)
+  } catch {
+    return true
+  }
 }

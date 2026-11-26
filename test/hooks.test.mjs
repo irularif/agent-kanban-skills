@@ -98,3 +98,27 @@ test('hooksPath as absolute path inside the repo works', () => {
   const r = installHooks(root)
   assert.ok(r.changed.includes('.githooks/pre-push'))
 })
+
+test('existing hook with exit/exec warns the block may never run, and dryRun writes nothing', () => {
+  const root = gitRepo()
+  git(root, 'config', 'core.hooksPath', '.githooks')
+  mkdirSync(join(root, '.githooks'))
+  writeFileSync(join(root, '.githooks/pre-push'), '#!/bin/sh\nnpm test\nexec node x.js\n')
+  writeFileSync(join(root, '.githooks/post-checkout'), '#!/bin/sh\n  exit 0\n')
+  const dry = installHooks(root, { dryRun: true })
+  assert.ok(dry.changed.includes('.githooks/pre-push'))
+  assert.ok(!existsSync(join(root, '.githooks/kanban-reminder.sh')))
+  assert.ok(!read(root, '.githooks/pre-push').includes('kanban:start'))
+  const r = installHooks(root)
+  assert.equal(r.manual.length, 2)
+  assert.ok(r.manual.some((m) => /pre-push/.test(m) && /never run/.test(m)))
+  assert.ok(r.manual.some((m) => /post-checkout/.test(m)))
+})
+
+test('plain existing hook gives no manual note', () => {
+  const root = gitRepo()
+  git(root, 'config', 'core.hooksPath', '.githooks')
+  mkdirSync(join(root, '.githooks'))
+  writeFileSync(join(root, '.githooks/pre-push'), '#!/bin/sh\necho old\n')
+  assert.deepEqual(installHooks(root).manual, [])
+})

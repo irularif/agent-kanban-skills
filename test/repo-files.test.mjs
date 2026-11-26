@@ -71,3 +71,26 @@ test('language id picks the Indonesian section', () => {
   writeRepoFiles(root, binding, { ...opts, language: 'id' })
   assert.match(read(root, 'CONTRIBUTING.md'), /Kotak masuk|kotak masuk/)
 })
+
+test('dryRun lists what would be written without writing', () => {
+  const root = tmp()
+  const r = writeRepoFiles(root, binding, { ...opts, dryRun: true })
+  assert.deepEqual(r.changed.sort(), [
+    '.github/ISSUE_TEMPLATE/bug.yml',
+    '.github/ISSUE_TEMPLATE/finding.yml',
+    'AGENTS.md',
+    'CONTRIBUTING.md',
+  ])
+  assert.equal(existsSync(join(root, 'CONTRIBUTING.md')), false)
+})
+
+test('contributing text says /init-kanban installs hooks and describes the real warnings', () => {
+  for (const language of ['en', 'id']) {
+    const root = tmp()
+    writeRepoFiles(root, binding, { ...opts, language })
+    const text = read(root, 'CONTRIBUTING.md')
+    assert.match(text, /\/init-kanban/)
+    assert.doesNotMatch(text, /installed by `\/start-issue`|dipasang oleh `\/start-issue`/)
+    assert.match(text, /In progress/)
+  }
+})

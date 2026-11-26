@@ -17,7 +17,7 @@ Status meanings:
 
 Areas: {{areas}}. Every issue gets one `area:` label and a Size (S, M, L).
 
-The git hooks installed by `/start-issue` only warn, they never block: they flag a branch name without an issue number and a PR body without `Closes #n`.
+The git hooks installed by `/init-kanban` only warn, they never block: `post-checkout` flags a new branch whose name has no issue number, and `pre-push` flags a push when the issue's card is not In progress or In review.
 
 ## id
 
@@ -38,4 +38,4 @@ Arti setiap status:
 
 Area: {{areas}}. Setiap issue mendapat satu label `area:` dan Size (S, M, L).
 
-Git hook yang dipasang oleh `/start-issue` hanya memberi peringatan dan tidak pernah memblokir: nama branch tanpa nomor issue dan deskripsi PR tanpa `Closes #n` akan diberi peringatan.
+Git hook yang dipasang oleh `/init-kanban` hanya memberi peringatan dan tidak pernah memblokir: `post-checkout` memperingatkan branch baru yang namanya tanpa nomor issue, dan `pre-push` memperingatkan jika kartu issue belum berstatus In progress atau In review.

@@ -10,7 +10,7 @@ const S = '<!-- kanban:start -->'
 const E = '<!-- kanban:end -->'
 const q = (re) => (a) => a[1] === 'graphql' && re.test(a[2])
 
-function setup({ source = '# Plan\n', failCreateAt = null, conflicts = 0, start = 100, failAddSub = false } = {}) {
+function setup({ source = '# Plan\n', failCreateAt = null, conflicts = 0, start = 100, failAddSub = false, addSubMessage = 'nope' } = {}) {
   const root = mkdtempSync(join(tmpdir(), 'issues-'))
   mkdirSync(join(root, '.github'))
   writeFileSync(join(root, '.github', 'kanban.json'), JSON.stringify({ owner: 'ksatu', projectNumber: 3 }))
@@ -47,7 +47,7 @@ function setup({ source = '# Plan\n', failCreateAt = null, conflicts = 0, start 
     }],
     [q(/updateProjectV2ItemFieldValue/), {}],
     [q(/addSubIssue/), () => {
-      if (failAddSub) throw new Error('kanban: GraphQL error: nope')
+      if (failAddSub) throw new Error(`kanban: GraphQL error: ${addSubMessage}`)
       return {}
     }],
   ])
@@ -164,4 +164,40 @@ test('duplicate keys and missing parent are rejected before writes', () => {
   assert.throws(() => addIssues(gh, root, plan([u('u1'), u('u1')]), opts), /duplicate key/)
   assert.throws(() => addIssues(gh, root, { source: 'plan.md', units: [] }, opts), /no parent/)
   assert.equal(creates(gh).length, 0)
+})
+
+test('parent defaults to Status Ready', () => {
+  const { root, gh } = setup()
+  addIssues(gh, root, plan([]), opts)
+  const upd = withGql(gh, /updateProjectV2ItemFieldValue/).map((a) => a[2])
+  assert.ok(upd.some((m) => m.includes('"F_st"') && m.includes('"S_ready"')))
+})
+
+test('title and body are required for parent and units', () => {
+  for (const bad of [{ title: '' }, { body: '  ' }, { title: 5 }, { body: undefined }]) {
+    const { root, gh } = setup()
+    assert.throws(() => addIssues(gh, root, plan([u('u1', bad)]), opts), /kanban: .*(title|body)/)
+    assert.equal(creates(gh).length, 0)
+    const p = plan([])
+    p.parent = { ...p.parent, ...bad }
+    assert.throws(() => addIssues(gh, root, p, opts), /kanban: .*(title|body)/)
+    assert.equal(creates(gh).length, 0)
+  }
+})
+
+test('unknown area error lists the valid areas', () => {
+  const { root, gh } = setup()
+  assert.throws(() => addIssues(gh, root, plan([u('u1', { area: 'mobile' })]), opts), /valid: web, api/)
+})
+
+test('addSubIssue "already" error counts as success', () => {
+  const { root, gh } = setup({ failAddSub: true, addSubMessage: 'Issue is already a sub-issue of that parent' })
+  const r = addIssues(gh, root, plan([u('u1')]), opts)
+  assert.deepEqual(r.created, [101, 102])
+  assert.doesNotMatch(readFileSync(join(root, 'plan.md'), 'utf8'), /kanban-pending/)
+})
+
+test('other addSubIssue errors still fail', () => {
+  const { root, gh } = setup({ failAddSub: true })
+  assert.throws(() => addIssues(gh, root, plan([u('u1')]), opts), /nope/)
 })

@@ -184,3 +184,50 @@ test('closeParents closes parents whose sub-issues are all closed', () => {
   assert.equal(close.length, 1)
   assert.match(close[0].join(' '), /issue close 1 .*All sub-issues are done\./)
 })
+
+function prRepo() {
+  const root = repo()
+  git(root, 'switch', '-q', '-c', 'feat/12-x')
+  const remote = mkdtempSync(join(tmpdir(), 'remote-'))
+  git(remote, 'init', '-q', '--bare')
+  git(root, 'remote', 'add', 'origin', remote)
+  return root
+}
+const createBody = (gh) => {
+  const a = gh.calls.find((c) => c[0] === 'pr' && c[1] === 'create')
+  return a[a.indexOf('--body') + 1]
+}
+
+test('openPr --body-file appends Closes when missing', () => {
+  const root = prRepo()
+  const f = join(root, 'body.md')
+  writeFileSync(f, 'Ringkasan\n')
+  const { gh } = board()
+  openPr(gh, root, 12, { recheckMs: 0, retryDelayMs: 0, bodyFile: f })
+  assert.equal(createBody(gh), 'Ringkasan\n\nCloses #12')
+})
+
+test('openPr --body-file keeps body when Closes already present', () => {
+  const root = prRepo()
+  const f = join(root, 'body.md')
+  writeFileSync(f, 'Ringkasan\n\nCloses #12\n')
+  const { gh } = board()
+  openPr(gh, root, 12, { recheckMs: 0, retryDelayMs: 0, bodyFile: f })
+  assert.equal(createBody(gh).match(/Closes #12/g).length, 1)
+})
+
+test('openPr without body file uses Closes only', () => {
+  const { gh } = board()
+  openPr(gh, prRepo(), 12, { recheckMs: 0, retryDelayMs: 0 })
+  assert.equal(createBody(gh), 'Closes #12')
+})
+
+test('openPr reuses an existing PR and still sets In review', () => {
+  const { gh } = board()
+  const orig = gh.run
+  gh.json = (a) => (a[0] === 'pr' && a[1] === 'view' ? (gh.calls.push(a), { url: 'https://github.com/ksatu/sitakro/pull/49' }) : orig(a))
+  const r = openPr(gh, prRepo(), 12, { recheckMs: 0, retryDelayMs: 0 })
+  assert.equal(r.url, 'https://github.com/ksatu/sitakro/pull/49')
+  assert.equal(calls(gh, /^pr create/).length, 0)
+  assert.match(calls(gh, /updateProjectV2ItemFieldValue/)[0].join(' '), /S_In review/)
+})

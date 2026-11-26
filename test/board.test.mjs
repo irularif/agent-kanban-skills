@@ -96,7 +96,7 @@ const fullLabels = () => ['bug', 'finding', 'area:web', 'area:shared']
 
 test('second run with everything present makes no mutations', () => {
   const gh = fakeGh(routes({ projects: [{ id: 'P_1', number: 3, title: 'sitakro' }], state: fullState(), labels: fullLabels() }))
-  const r = ensureBoard(gh, org, { areas: ['web', 'shared'] })
+  const r = ensureBoard(gh, org, { areas: ['web', 'shared'], binding: { projectNumber: 3 } })
   assert.deepEqual(mutations(gh), [])
   assert.deepEqual(r.created, [])
   assert.equal(r.binding.projectNumber, 3)
@@ -113,7 +113,7 @@ test('partial state: adds missing Area option, keeps ids, leaves Size alone', ()
   const state = fullState()
   state.fields.nodes[state.fields.nodes.length - 2] = sel('F_Area', 'Area', [opt('a1', 'web')])
   const gh = fakeGh(routes({ projects: [{ id: 'P_1', number: 3, title: 'sitakro' }], state, labels: fullLabels() }))
-  const r = ensureBoard(gh, org, { areas: ['web', 'shared'] })
+  const r = ensureBoard(gh, org, { areas: ['web', 'shared'], binding: { projectNumber: 3 } })
   const m = mutations(gh)
   assert.equal(m.length, 1)
   assert.match(m[0], /fieldId: "F_Area"/)
@@ -183,4 +183,28 @@ test('fieldIds maps names to ids and option ids', () => {
     Title: { id: 'F_t', options: {} },
     Status: { id: 'F_status', options: { Todo: 'o1', 'In Progress': 'o2', Done: 'o3' } },
   })
+})
+
+test('labels compare case-insensitively', () => {
+  const gh = fakeGh(routes({ projects: [{ id: 'P_1', number: 3, title: 'sitakro' }], state: fullState(), labels: ['Bug', 'Finding', 'area:web', 'Area:Shared'] }))
+  const r = ensureBoard(gh, org, { areas: ['web', 'shared'], binding: { projectNumber: 3 } })
+  assert.deepEqual(mutations(gh), [])
+  assert.deepEqual(r.created, [])
+})
+
+test('collaborators are never reported as created (no readable collaborators)', () => {
+  const gh = fakeGh(routes({ projects: [{ id: 'P_1', number: 3, title: 'sitakro' }], state: fullState(), labels: fullLabels() }))
+  const r = ensureBoard(gh, org, { areas: ['web', 'shared'], collaborators: [{ login: 'dev', role: 'READ' }], binding: { projectNumber: 3 } })
+  assert.deepEqual(r.created, [])
+  assert.ok(text(gh).some((x) => /updateProjectV2Collaborators/.test(x)))
+})
+
+test('adopting an existing project by title without a binding is reported', () => {
+  for (const dryRun of [false, true]) {
+    const gh = fakeGh(routes({ projects: [{ id: 'P_1', number: 3, title: 'sitakro' }], state: fullState(), labels: fullLabels() }))
+    const r = ensureBoard(gh, org, { areas: ['web', 'shared'], dryRun })
+    assert.deepEqual(r.created, ["Using existing project #3 'sitakro'"])
+  }
+  const gh = fakeGh(routes({ projects: [{ id: 'P_1', number: 3, title: 'sitakro' }], state: fullState(), labels: fullLabels() }))
+  assert.deepEqual(ensureBoard(gh, org, { areas: ['web', 'shared'], binding: { projectNumber: 3 } }).created, [])
 })

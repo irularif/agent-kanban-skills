@@ -1,4 +1,5 @@
 import { execFileSync } from 'node:child_process'
+import { readFileSync } from 'node:fs'
 import { readBinding } from './binding.mjs'
 import { fieldIds } from './board.mjs'
 import { repoInfo } from './gh.mjs'
@@ -90,7 +91,7 @@ export function startIssue(gh, root, n, { prefix, retryDelayMs = 3000 } = {}) {
   return { branch, closedParents, issue: { title: issue.title, body: issue.body, url: issue.url } }
 }
 
-export function openPr(gh, root, n, { title, draft = false, recheckMs = 10000, retryDelayMs = 3000 } = {}) {
+export function openPr(gh, root, n, { title, draft = false, bodyFile, recheckMs = 10000, retryDelayMs = 3000 } = {}) {
   const current = git(root, 'branch', '--show-current')
   const m = BRANCH_NUMBER.exec(current)
   if (!m) throw new Error(`kanban: branch '${current}' has no issue number; use <prefix>/<n>-<slug>`)
@@ -100,9 +101,21 @@ export function openPr(gh, root, n, { title, draft = false, recheckMs = 10000, r
   const board = loadBoard(gh, root)
   const issue = viewIssue(gh, n)
   git(root, 'push', '-u', 'origin', 'HEAD')
-  const args = ['pr', 'create', '--title', title ?? issue.title, '--body', `Closes #${n}`]
-  if (draft) args.push('--draft')
-  const url = gh.run(args).trim().split('\n').pop()
+  let url = null
+  try {
+    url = gh.json(['pr', 'view', '--json', 'url']).url ?? null
+  } catch {}
+  if (!url) {
+    const closes = `Closes #${n}`
+    let body = closes
+    if (bodyFile) {
+      const text = readFileSync(bodyFile, 'utf8').trimEnd()
+      body = new RegExp(`^\\s*closes #${n}\\b`, 'im').test(text) ? text : `${text}\n\n${closes}`
+    }
+    const args = ['pr', 'create', '--title', title ?? issue.title, '--body', body]
+    if (draft) args.push('--draft')
+    url = gh.run(args).trim().split('\n').pop()
+  }
 
   const itemId = addItem(gh, board.projectId, issue.id, retryDelayMs)
   setStatus(gh, board, itemId, 'In review')
