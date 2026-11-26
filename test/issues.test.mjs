@@ -10,7 +10,7 @@ const S = '<!-- kanban:start -->'
 const E = '<!-- kanban:end -->'
 const q = (re) => (a) => a[1] === 'graphql' && re.test(a[2])
 
-function setup({ source = '# Plan\n', failCreateAt = null, conflicts = 0, start = 100 } = {}) {
+function setup({ source = '# Plan\n', failCreateAt = null, conflicts = 0, start = 100, failAddSub = false } = {}) {
   const root = mkdtempSync(join(tmpdir(), 'issues-'))
   mkdirSync(join(root, '.github'))
   writeFileSync(join(root, '.github', 'kanban.json'), JSON.stringify({ owner: 'ksatu', projectNumber: 3 }))
@@ -46,7 +46,10 @@ function setup({ source = '# Plan\n', failCreateAt = null, conflicts = 0, start 
       return { addProjectV2ItemById: { item: { id: 'ITEM' } } }
     }],
     [q(/updateProjectV2ItemFieldValue/), {}],
-    [q(/addSubIssue/), {}],
+    [q(/addSubIssue/), () => {
+      if (failAddSub) throw new Error('kanban: GraphQL error: nope')
+      return {}
+    }],
   ])
   return { root, gh }
 }
@@ -71,7 +74,7 @@ test('fresh run creates parent and units, wires board, writes map', () => {
   assert.ok(parentCall.join(' ').includes('Epic body\n\nSource: plan.md'))
   const unit1 = creates(gh)[1]
   assert.equal(unit1[unit1.indexOf('--label') + 1], 'area:web')
-  assert.ok(unit1.at(-1).endsWith('Source: plan.md') || unit1.join(' ').includes('Source: plan.md'))
+  assert.equal(unit1[unit1.indexOf('--body') + 1], 'B u1\n\nSource: plan.md')
   assert.equal(withGql(gh, /addSubIssue/).length, 2)
   assert.match(withGql(gh, /addSubIssue/)[0][2], /issueId: "I_101", subIssueId: "I_102"/)
   assert.equal(withGql(gh, /addProjectV2ItemById/).length, 3)
@@ -129,4 +132,36 @@ test('gives up after 3 conflicts', () => {
   const { root, gh } = setup({ conflicts: 5 })
   assert.throws(() => addIssues(gh, root, plan([]), opts), /temporary conflict/)
   assert.equal(withGql(gh, /addProjectV2ItemById/).length, 3)
+})
+
+test('failure after create keeps key pending; re-run rewires without creating', () => {
+  const first = setup({ failAddSub: true })
+  assert.throws(() => addIssues(first.gh, first.root, plan([u('u1')]), opts), /nope/)
+  const text = readFileSync(join(first.root, 'plan.md'), 'utf8')
+  assert.match(text, /kanban-issues: \{"epic":101,"u1":102\}\nkanban-pending: \["u1"\]/)
+
+  const second = setup({ source: text, start: 102 })
+  const r = addIssues(second.gh, second.root, plan([u('u1')]), opts)
+  assert.equal(creates(second.gh).length, 0)
+  assert.equal(r.created.length, 0)
+  assert.equal(withGql(second.gh, /addProjectV2ItemById/).length, 1)
+  assert.equal(withGql(second.gh, /updateProjectV2ItemFieldValue/).length, 3)
+  assert.equal(withGql(second.gh, /addSubIssue/).length, 1)
+  assert.doesNotMatch(readFileSync(join(second.root, 'plan.md'), 'utf8'), /kanban-pending/)
+})
+
+test('new parent links units that already exist', () => {
+  const source = `# Plan\n\n${S}\nkanban-issues: {"u1":102}\n${E}\n`
+  const { root, gh } = setup({ source, start: 110 })
+  const r = addIssues(gh, root, plan([u('u1')]), opts)
+  assert.equal(r.parent, 111)
+  assert.equal(creates(gh).length, 1)
+  assert.match(withGql(gh, /addSubIssue/)[0][2], /issueId: "I_111", subIssueId: "I_102"/)
+})
+
+test('duplicate keys and missing parent are rejected before writes', () => {
+  const { root, gh } = setup()
+  assert.throws(() => addIssues(gh, root, plan([u('u1'), u('u1')]), opts), /duplicate key/)
+  assert.throws(() => addIssues(gh, root, { source: 'plan.md', units: [] }, opts), /no parent/)
+  assert.equal(creates(gh).length, 0)
 })

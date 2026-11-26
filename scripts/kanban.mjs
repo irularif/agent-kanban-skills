@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { realpathSync } from 'node:fs'
+import { readFileSync, realpathSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { parseArgs } from 'node:util'
 import { GhError, createGh, repoInfo, repoRoot } from './lib/gh.mjs'
@@ -8,7 +8,6 @@ import { ensureBoard } from './lib/board.mjs'
 import { writeRepoFiles } from './lib/repo-files.mjs'
 import { installHooks } from './lib/hooks.mjs'
 import { addIssues } from './lib/issues.mjs'
-import { readFileSync } from 'node:fs'
 
 const USAGE = `Usage: kanban.mjs <command> [options]
 
