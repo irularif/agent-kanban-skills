@@ -195,7 +195,7 @@ export function ensureBoard(gh, repo, { areas = [], collaborators = [], dryRun =
         return `{userId: ${str(id)}, role: ${role}}`
       })
       mutate(
-        `mutation { updateProjectV2Collaborators(input: {projectId: ${str(projectId)}, collaborators: [${entries.join(',')}]}) { collaborators { nodes { __typename } } } }`,
+        `mutation { updateProjectV2Collaborators(input: {projectId: ${str(projectId)}, collaborators: [${entries.join(',')}]}) { clientMutationId } }`,
       )
     }
   }

@@ -155,6 +155,8 @@ test('collaborators: user id lookup and role mapping', () => {
   ensureBoard(gh, org, { areas: ['web', 'shared'], collaborators: [{ login: 'dev', role: 'WRITE' }] })
   const m = text(gh).find((x) => /updateProjectV2Collaborators/.test(x))
   assert.match(m, /userId: "U_dev", role: WRITER/)
+  assert.ok(m.endsWith('{ clientMutationId } }'), m)
+  assert.doesNotMatch(m, /collaborators \{/)
 })
 
 test('pendingManualSteps: disabled auto-add and always the manual steps', () => {
@@ -208,4 +210,15 @@ test('adopting an existing project by title without a binding is reported', () =
   }
   const gh = fakeGh(routes({ projects: [{ id: 'P_1', number: 3, title: 'sitakro' }], state: fullState(), labels: fullLabels() }))
   assert.deepEqual(ensureBoard(gh, org, { areas: ['web', 'shared'], binding: { projectNumber: 3 } }).created, [])
+})
+
+test('no GraphQL document selects a connection without first/last', async () => {
+  const { readFileSync, readdirSync } = await import('node:fs')
+  const dir = new URL('../scripts/lib/', import.meta.url)
+  for (const f of readdirSync(dir)) {
+    const src = readFileSync(new URL(f, dir), 'utf8')
+    for (const m of src.matchAll(/(\w+)(\([^)]*\))? \{\s*(nodes|edges)\b/g)) {
+      assert.match(m[2] ?? '', /first:|last:/, `${f}: ${m[1]} selects ${m[3]} without first/last`)
+    }
+  }
 })
