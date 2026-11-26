@@ -8,6 +8,7 @@ import { ensureBoard } from './lib/board.mjs'
 import { writeRepoFiles } from './lib/repo-files.mjs'
 import { installHooks } from './lib/hooks.mjs'
 import { addIssues } from './lib/issues.mjs'
+import { closeParents, openPr, startIssue } from './lib/work.mjs'
 
 const USAGE = `Usage: kanban.mjs <command> [options]
 
@@ -15,15 +16,10 @@ Commands:
   init           create or bind the GitHub Project and repo files
   check          verify the binding and project setup
   add-issues     create issues from a plan and add them to the project
-  start          move an issue to In progress
-  pr             link a pull request to its issue
+  start          move an issue to In progress and switch to its branch
+  pr             push, open a pull request for the issue, set In review
   close-parents  close parent issues whose sub-issues are done
 `
-
-const notImplemented = (name) => () => {
-  console.error(`kanban: ${name} not implemented`)
-  return 1
-}
 
 function init(args) {
   const { values } = parseArgs({
@@ -114,13 +110,62 @@ function addIssuesCommand(args) {
   return 0
 }
 
+function issueNumber(positionals, usage) {
+  if (positionals.length !== 1 || !/^\d+$/.test(positionals[0])) throw new Error(`kanban: usage: ${usage}`)
+  return Number(positionals[0])
+}
+
+function requireBinding() {
+  const root = repoRoot()
+  if (!readBinding(root)) throw new Error('kanban: run /init-kanban first')
+  return root
+}
+
+function start(args) {
+  const { values, positionals } = parseArgs({
+    args,
+    options: { prefix: { type: 'string' } },
+    allowPositionals: true,
+  })
+  const n = issueNumber(positionals, 'start <n> [--prefix feat|fix|...]')
+  const root = requireBinding()
+  const r = startIssue(createGh({ cwd: root }), root, n, { prefix: values.prefix })
+  for (const p of r.closedParents) console.log(`Closed parent #${p} (all sub-issues done)`)
+  console.log(`Branch: ${r.branch}`)
+  console.log(`Issue #${n}: ${r.issue.title}`)
+  console.log(`URL: ${r.issue.url}`)
+  console.log(`\n${r.issue.body ?? ''}`)
+  return 0
+}
+
+function pr(args) {
+  const { values, positionals } = parseArgs({
+    args,
+    options: { title: { type: 'string' }, draft: { type: 'boolean' } },
+    allowPositionals: true,
+  })
+  const n = issueNumber(positionals, 'pr <n> [--title <title>] [--draft]')
+  const root = requireBinding()
+  const r = openPr(createGh({ cwd: root }), root, n, { title: values.title, draft: values.draft })
+  console.log(`PR: ${r.url}`)
+  return 0
+}
+
+function closeParentsCommand(args) {
+  parseArgs({ args, options: {} })
+  const root = requireBinding()
+  const closed = closeParents(createGh({ cwd: root }), readBinding(root))
+  console.log(closed.length ? `Closed: ${closed.map((n) => `#${n}`).join(', ')}` : 'Closed: nothing')
+  return 0
+}
+
 export const commands = {
   init,
   check,
   'add-issues': addIssuesCommand,
-  start: notImplemented('start'),
-  pr: notImplemented('pr'),
-  'close-parents': notImplemented('close-parents'),
+  start,
+  pr,
+  'close-parents': closeParentsCommand,
 }
 
 export async function main(argv = process.argv.slice(2), { commands: table = commands } = {}) {

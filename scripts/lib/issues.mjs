@@ -10,7 +10,7 @@ const STATUSES = ['Ready', 'Backlog']
 const SIZES = ['S', 'M', 'L']
 const str = JSON.stringify
 
-function sleep(ms) {
+export function sleep(ms) {
   if (ms > 0) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms)
 }
 
@@ -31,7 +31,7 @@ function readState(text) {
 const blockBody = (map, pending) =>
   [`${MAP_PREFIX} ${str(map)}`, ...(pending.length ? [`${PENDING_PREFIX} ${str(pending)}`] : [])].join('\n')
 
-function findProjectId(gh, binding) {
+export function findProjectId(gh, binding) {
   const nodes =
     gh.graphql(
       `query($login: String!) {
@@ -44,6 +44,26 @@ function findProjectId(gh, binding) {
   const project = nodes.find((p) => p.number === binding.projectNumber)
   if (!project) throw new Error(`kanban: project #${binding.projectNumber} not found; run /init-kanban`)
   return project.id
+}
+
+export function addItem(gh, projectId, contentId, retryDelayMs = 3000) {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return gh.graphql(
+        `mutation { addProjectV2ItemById(input: {projectId: ${str(projectId)}, contentId: ${str(contentId)}}) { item { id } } }`,
+      ).addProjectV2ItemById.item.id
+    } catch (e) {
+      if (attempt >= 3 || !/conflict/i.test(e.message)) throw e
+      sleep(retryDelayMs)
+    }
+  }
+}
+
+export function setItemField(gh, projectId, fields, itemId, name, option) {
+  const f = fields[name]
+  gh.graphql(
+    `mutation { updateProjectV2ItemFieldValue(input: {projectId: ${str(projectId)}, itemId: ${str(itemId)}, fieldId: ${str(f.id)}, value: {singleSelectOptionId: ${str(f.options[option])}}}) { projectV2Item { id } } }`,
+  )
 }
 
 function validate(plan, items, fields) {
@@ -93,25 +113,9 @@ export function addIssues(gh, root, plan, { dryRun = false, retryDelayMs = 3000 
 
   const nodeId = (n) => gh.json(['issue', 'view', String(n), '--json', 'id']).id
 
-  const addToProject = (contentId) => {
-    for (let attempt = 1; ; attempt++) {
-      try {
-        return gh.graphql(
-          `mutation { addProjectV2ItemById(input: {projectId: ${str(projectId)}, contentId: ${str(contentId)}}) { item { id } } }`,
-        ).addProjectV2ItemById.item.id
-      } catch (e) {
-        if (attempt >= 3 || !/conflict/i.test(e.message)) throw e
-        sleep(retryDelayMs)
-      }
-    }
-  }
+  const addToProject = (contentId) => addItem(gh, projectId, contentId, retryDelayMs)
 
-  const setField = (itemId, name, option) => {
-    const f = fields[name]
-    gh.graphql(
-      `mutation { updateProjectV2ItemFieldValue(input: {projectId: ${str(projectId)}, itemId: ${str(itemId)}, fieldId: ${str(f.id)}, value: {singleSelectOptionId: ${str(f.options[option])}}}) { projectV2Item { id } } }`,
-    )
-  }
+  const setField = (itemId, name, option) => setItemField(gh, projectId, fields, itemId, name, option)
 
   const save = () => {
     text = upsertBlock(text, blockBody(map, [...pending]), 'md')
