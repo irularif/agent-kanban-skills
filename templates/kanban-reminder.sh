@@ -26,7 +26,9 @@ case "$1" in
   pre-push)
     [ -n "$num" ] || exit 0
     command -v gh >/dev/null 2>&1 || exit 0
-    gh auth status >/dev/null 2>&1 || exit 0
+    run=""
+    command -v timeout >/dev/null 2>&1 && run="timeout 5"
+    $run gh auth status >/dev/null 2>&1 || exit 0
     root=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0
     file="$root/.github/kanban.json"
     [ -f "$file" ] || exit 0
@@ -38,8 +40,6 @@ case "$1" in
     [ -n "$owner" ] && [ -n "$name" ] && [ "$owner" != "$slug" ] || exit 0
     query='query($o:String!,$r:String!,$n:Int!){repository(owner:$o,name:$r){issue(number:$n){projectItems(first:20){nodes{project{number} fieldValueByName(name:"Status"){... on ProjectV2ItemFieldSingleSelectValue{name}}}}}}}'
     filter=".data.repository.issue.projectItems.nodes[] | select(.project.number == $project) | .fieldValueByName.name // empty"
-    run=""
-    command -v timeout >/dev/null 2>&1 && run="timeout 5"
     status=$($run gh api graphql -f query="$query" -f o="$owner" -f r="$name" -F n="$num" --jq "$filter" 2>/dev/null) || exit 0
     status=$(printf '%s\n' "$status" | head -n 1)
     case "$status" in

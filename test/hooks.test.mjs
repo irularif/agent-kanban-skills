@@ -67,3 +67,34 @@ test('none: manual instructions', () => {
   assert.deepEqual(r.changed, [])
   assert.ok(r.manual.length > 0)
 })
+
+test('husky v9 hooksPath .husky/_ installs into .husky', () => {
+  for (const p of ['.husky/_', '.husky/_/']) {
+    const root = gitRepo()
+    git(root, 'config', 'core.hooksPath', p)
+    assert.deepEqual(detectHookMechanism(root), { kind: 'husky', dir: '.husky' })
+    const r = installHooks(root)
+    assert.ok(r.changed.includes('.husky/pre-push'))
+    assert.ok(!existsSync(join(root, '.husky/_')))
+  }
+})
+
+test('hooksPath outside the repo: nothing written, manual note', () => {
+  const shared = tmp()
+  for (const p of [shared, '~/kanban-test-hooks-dir']) {
+    const root = gitRepo()
+    git(root, 'config', 'core.hooksPath', p)
+    const r = installHooks(root)
+    assert.deepEqual(r.changed, [])
+    assert.ok(r.manual.length > 0)
+    assert.ok(!existsSync(join(root, p)))
+    assert.ok(!existsSync(join(shared, 'pre-push')))
+  }
+})
+
+test('hooksPath as absolute path inside the repo works', () => {
+  const root = gitRepo()
+  git(root, 'config', 'core.hooksPath', join(root, '.githooks'))
+  const r = installHooks(root)
+  assert.ok(r.changed.includes('.githooks/pre-push'))
+})

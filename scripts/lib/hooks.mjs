@@ -1,6 +1,7 @@
 import { chmodSync, copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { spawnSync } from 'node:child_process'
-import { dirname, join } from 'node:path'
+import { homedir } from 'node:os'
+import { dirname, isAbsolute, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { upsertBlock } from './markers.mjs'
 
@@ -11,7 +12,10 @@ const blockFor = (hook) => `sh "$(dirname "$0")/kanban-reminder.sh" ${hook} "$@"
 export function detectHookMechanism(root) {
   const r = spawnSync('git', ['config', 'core.hooksPath'], { cwd: root, encoding: 'utf8' })
   const dir = r.status === 0 ? r.stdout.trim() : ''
-  if (dir) return { kind: 'hooksPath', dir }
+  if (dir) {
+    if (dir.replace(/\/+$/, '') === '.husky/_') return { kind: 'husky', dir: '.husky' }
+    return { kind: 'hooksPath', dir }
+  }
   if (existsSync(join(root, '.husky'))) return { kind: 'husky', dir: '.husky' }
   if (['lefthook.yml', 'lefthook.yaml'].some((f) => existsSync(join(root, f)))) return { kind: 'lefthook' }
   return { kind: 'none' }
@@ -37,6 +41,20 @@ export function installHooks(root) {
         'No git hook manager detected: copy templates/kanban-reminder.sh from the init-kanban skill into your hooks directory and call it from post-checkout and pre-push (warn-only), e.g. in each hook:\n    sh "$(dirname "$0")/kanban-reminder.sh" <hook> "$@" || true',
       ],
     }
+  }
+
+  if (mech.kind === 'hooksPath') {
+    const abs = resolve(root, mech.dir.replace(/^~(?=$|\/)/, homedir()))
+    const rel = relative(resolve(root), abs)
+    if (rel === '' || rel.startsWith('..') || isAbsolute(rel)) {
+      return {
+        changed: [],
+        manual: [
+          `core.hooksPath (${mech.dir}) is outside this repo, so nothing was written there. Copy templates/kanban-reminder.sh from the init-kanban skill into that hooks directory and call it from its post-checkout and pre-push hooks:\n    sh "$(dirname "$0")/kanban-reminder.sh" <hook> "$@" || true`,
+        ],
+      }
+    }
+    mech.dir = rel
   }
 
   const changed = []
