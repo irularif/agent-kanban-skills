@@ -7,6 +7,8 @@ import { readBinding, writeBinding } from './lib/binding.mjs'
 import { ensureBoard } from './lib/board.mjs'
 import { writeRepoFiles } from './lib/repo-files.mjs'
 import { installHooks } from './lib/hooks.mjs'
+import { addIssues } from './lib/issues.mjs'
+import { readFileSync } from 'node:fs'
 
 const USAGE = `Usage: kanban.mjs <command> [options]
 
@@ -82,10 +84,41 @@ function check(args) {
   return r.created.length ? 1 : 0
 }
 
+function addIssuesCommand(args) {
+  const { values, positionals } = parseArgs({
+    args,
+    options: { 'dry-run': { type: 'boolean' } },
+    allowPositionals: true,
+  })
+  if (positionals.length !== 1) throw new Error('kanban: usage: add-issues <units.json> [--dry-run]')
+  const root = repoRoot()
+  if (!readBinding(root)) {
+    console.error('kanban: run /init-kanban first')
+    return 1
+  }
+  let plan
+  try {
+    plan = JSON.parse(readFileSync(positionals[0], 'utf8'))
+  } catch (e) {
+    throw new Error(`kanban: cannot read ${positionals[0]}: ${e.message}`)
+  }
+  const dryRun = values['dry-run'] ?? false
+  const r = addIssues(createGh({ cwd: root }), root, plan, { dryRun })
+  if (dryRun) {
+    console.log(`Would create: ${r.planned.length ? r.planned.join(', ') : 'nothing (all issues exist)'}`)
+  } else {
+    console.log(`Created: ${r.created.length ? r.created.map((n) => `#${n}`).join(', ') : 'nothing'}`)
+    console.log(`Parent: #${r.parent}`)
+    console.log(`Update recorded in ${plan.source}; commit it.`)
+  }
+  if (r.existing.length) console.log(`Already existed: ${r.existing.map((n) => `#${n}`).join(', ')}`)
+  return 0
+}
+
 export const commands = {
   init,
   check,
-  'add-issues': notImplemented('add-issues'),
+  'add-issues': addIssuesCommand,
   start: notImplemented('start'),
   pr: notImplemented('pr'),
   'close-parents': notImplemented('close-parents'),
