@@ -29,7 +29,11 @@ export function createGh({ exec = spawnSync, cwd } = {}) {
 
   function graphql(query, vars = {}) {
     const args = ['api', 'graphql', '-f', `query=${query}`]
-    for (const [k, v] of Object.entries(vars)) args.push('-F', `${k}=${v}`)
+    for (const [k, v] of Object.entries(vars)) {
+      if (typeof v === 'string') args.push('-f', `${k}=${v}`)
+      else if (typeof v === 'number' || typeof v === 'boolean') args.push('-F', `${k}=${v}`)
+      else throw new GhError(`kanban: graphql var ${k} must be scalar`)
+    }
     const res = json(args)
     if (res.errors?.length) {
       throw new GhError(`kanban: GraphQL error: ${res.errors.map((e) => e.message).join('; ')}`, res.errors)

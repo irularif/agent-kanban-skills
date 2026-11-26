@@ -33,3 +33,11 @@ test('fakeGh routes and records', () => {
   assert.equal(gh.calls.length, 2)
   assert.throws(() => gh.json(['nope']), /no route/)
 })
+
+test('graphql types vars: strings via -f, numbers/booleans via -F', () => {
+  let args
+  const gh = createGh({ exec: (_c, a) => { args = a; return { status: 0, stdout: '{"data":{}}', stderr: '' } } })
+  gh.graphql('q', { id: '98236657', n: 3, ok: true })
+  assert.deepEqual(args.slice(4), ['-f', 'id=98236657', '-F', 'n=3', '-F', 'ok=true'])
+  assert.throws(() => gh.graphql('q', { o: {} }), /must be scalar/)
+})
