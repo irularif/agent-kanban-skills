@@ -4,13 +4,13 @@ import { mkdtempSync, mkdirSync, writeFileSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fakeGh } from './fake-gh.mjs'
-import { addIssues } from '../scripts/lib/issues.mjs'
+import { addIssues, addItem } from '../scripts/lib/issues.mjs'
 
 const S = '<!-- kanban:start -->'
 const E = '<!-- kanban:end -->'
 const q = (re) => (a) => a[1] === 'graphql' && re.test(a[2])
 
-function setup({ source = '# Plan\n', failCreateAt = null, conflicts = 0, start = 100, failAddSub = false, addSubMessage = 'nope' } = {}) {
+function setup({ source = '# Plan\n', failCreateAt = null, conflicts = 0, start = 100, alreadyInBoard = false, failAddSub = false, addSubMessage = 'nope' } = {}) {
   const root = mkdtempSync(join(tmpdir(), 'issues-'))
   mkdirSync(join(root, '.github'))
   writeFileSync(join(root, '.github', 'kanban.json'), JSON.stringify({ owner: 'ksatu', projectNumber: 3 }))
@@ -38,7 +38,9 @@ function setup({ source = '# Plan\n', failCreateAt = null, conflicts = 0, start 
       return `https://github.com/ksatu/sitakro/issues/${next}\n`
     }],
     [(a) => a[0] === 'issue' && a[1] === 'view', (a) => ({ id: `I_${a[2]}` })],
+    [q(/projectItems\(first: 20\)/), { node: { projectItems: { nodes: [{ id: 'ITEM_other', project: { id: 'P_x' } }, { id: 'ITEM_auto', project: { id: 'P_1' } }] } } }],
     [q(/addProjectV2ItemById/), () => {
+      if (alreadyInBoard) throw new Error('kanban: GraphQL error: Content already exists in this project')
       if (conflictsLeft > 0) {
         conflictsLeft -= 1
         throw new Error('kanban: GraphQL error: temporary conflict, try again')
@@ -200,4 +202,19 @@ test('addSubIssue "already" error counts as success', () => {
 test('other addSubIssue errors still fail', () => {
   const { root, gh } = setup({ failAddSub: true })
   assert.throws(() => addIssues(gh, root, plan([u('u1')]), opts), /nope/)
+})
+
+test('addItem resolves an "already exists" error to the existing item id', () => {
+  const { gh } = setup({ alreadyInBoard: true })
+  assert.equal(addItem(gh, 'P_1', 'I_5', 0), 'ITEM_auto')
+  assert.throws(() => addItem(gh, 'P_none', 'I_5', 0), /already exists/)
+})
+
+test('add-issues with Auto-add already holding the items leaves nothing pending and sets fields', () => {
+  const { root, gh } = setup({ alreadyInBoard: true })
+  const r = addIssues(gh, root, plan([u('u1')]), opts)
+  assert.deepEqual(r.created, [101, 102])
+  assert.doesNotMatch(readFileSync(join(root, 'plan.md'), 'utf8'), /kanban-pending/)
+  const upd = withGql(gh, /updateProjectV2ItemFieldValue/).map((a) => a[2])
+  assert.ok(upd.length >= 4 && upd.every((m) => m.includes('"ITEM_auto"')))
 })

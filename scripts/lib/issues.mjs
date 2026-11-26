@@ -53,6 +53,17 @@ export function addItem(gh, projectId, contentId, retryDelayMs = 3000) {
         `mutation { addProjectV2ItemById(input: {projectId: ${str(projectId)}, contentId: ${str(contentId)}}) { item { id } } }`,
       ).addProjectV2ItemById.item.id
     } catch (e) {
+      if (/already exists/i.test(e.message)) {
+        // Auto-add workflow got there first: reuse the item it created.
+        const nodes =
+          gh.graphql(
+            `query($id: ID!) { node(id: $id) { ... on Issue { projectItems(first: 20) { nodes { id project { id } } } } ... on PullRequest { projectItems(first: 20) { nodes { id project { id } } } } } }`,
+            { id: contentId },
+          ).node?.projectItems?.nodes ?? []
+        const found = nodes.find((n) => n.project?.id === projectId)
+        if (found) return found.id
+        throw e
+      }
       if (attempt >= 3 || !/conflict/i.test(e.message)) throw e
       sleep(retryDelayMs)
     }
