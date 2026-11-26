@@ -5,6 +5,7 @@ import { parseArgs } from 'node:util'
 import { GhError, createGh, repoInfo, repoRoot } from './lib/gh.mjs'
 import { readBinding, writeBinding } from './lib/binding.mjs'
 import { ensureBoard } from './lib/board.mjs'
+import { writeRepoFiles } from './lib/repo-files.mjs'
 
 const USAGE = `Usage: kanban.mjs <command> [options]
 
@@ -29,8 +30,12 @@ function init(args) {
       area: { type: 'string' },
       collaborator: { type: 'string', multiple: true },
       'dry-run': { type: 'boolean' },
+      language: { type: 'string', default: 'en' },
     },
   })
+  if (!['en', 'id'].includes(values.language)) {
+    throw new Error(`kanban: invalid --language '${values.language}' (expected en or id)`)
+  }
   const areas = [...new Set([...(values.area ?? '').split(',').map((a) => a.trim()).filter(Boolean), 'shared'])]
   const collaborators = (values.collaborator ?? []).map((c) => {
     const [login, role] = c.split(':')
@@ -43,10 +48,18 @@ function init(args) {
   const root = repoRoot()
   const gh = createGh({ cwd: root })
   const r = ensureBoard(gh, repoInfo(gh), { areas, collaborators, dryRun, binding: readBinding(root) })
-  if (!dryRun) writeBinding(root, r.binding)
+  let files = { changed: [], warnings: [] }
+  if (!dryRun) {
+    writeBinding(root, r.binding)
+    files = writeRepoFiles(root, r.binding, { areas, language: values.language })
+    files.changed.unshift('.github/kanban.json')
+  }
   console.log(`${dryRun ? 'Would create' : 'Created'}: ${r.created.length ? r.created.join(', ') : 'nothing (board up to date)'}`)
   if (r.binding.url) console.log(`Board: ${r.binding.url}`)
+  if (files.changed.length) console.log(`Files written:\n${files.changed.map((f) => `  - ${f}`).join('\n')}`)
+  for (const w of files.warnings) console.log(`Warning: ${w}`)
   if (r.manual.length) console.log(`Manual steps:\n${r.manual.map((m) => `  - ${m}`).join('\n')}`)
+  if (!dryRun) console.log('Review and commit the files above.')
   return 0
 }
 

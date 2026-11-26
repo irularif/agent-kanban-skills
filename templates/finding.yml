@@ -1,0 +1,17 @@
+# kanban:managed
+name: Finding
+description: A review finding to triage
+labels: ["finding"]
+projects: ["{{project}}"]
+body:
+  - type: textarea
+    id: finding
+    attributes:
+      label: Finding
+      description: What you noticed and where (file, PR, screen).
+    validations:
+      required: true
+  - type: textarea
+    id: impact
+    attributes:
+      label: Why it matters

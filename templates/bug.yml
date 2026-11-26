@@ -1,0 +1,17 @@
+# kanban:managed
+name: Bug
+description: Something is not working
+labels: ["bug"]
+projects: ["{{project}}"]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you expected and what you got instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
