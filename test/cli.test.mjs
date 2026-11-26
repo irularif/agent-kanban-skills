@@ -37,3 +37,33 @@ test('main: passes raw args after the command name', async () => {
   assert.equal(await main(['start', '--issue', '5'], { commands }), 0)
   assert.deepEqual(got, ['--issue', '5'])
 })
+
+test('init --dry-run prints Would write lines and writes nothing', async () => {
+  const { mkdirSync, writeFileSync, readdirSync, chmodSync } = await import('node:fs')
+  const { execFileSync } = await import('node:child_process')
+  const root = mkdtempSync(join(tmpdir(), 'initdry-'))
+  execFileSync('git', ['init', '-q'], { cwd: root })
+  const bin = join(root, '..', `bin-${Date.now()}`)
+  mkdirSync(bin)
+  const script = `#!/usr/bin/env node
+const a = process.argv.slice(2)
+const j = a.join(' ')
+const out = (o) => process.stdout.write(JSON.stringify(o))
+if (a[0] === 'repo') out({ owner: { login: 'ksatu' }, name: 'demo', id: 'R_1', defaultBranchRef: { name: 'main' } })
+else if (a[0] === 'label') out([])
+else if (/projectsV2/.test(j)) out({ data: { repositoryOwner: { projectsV2: { nodes: [] } } } })
+else out({ data: { repositoryOwner: { id: 'O_1', __typename: 'Organization' } } })
+`
+  writeFileSync(join(bin, 'gh'), script)
+  chmodSync(join(bin, 'gh'), 0o755)
+  const r = spawnSync('node', [join(here, '..', 'scripts', 'kanban.mjs'), 'init', '--dry-run', '--area', 'api'], {
+    cwd: root,
+    encoding: 'utf8',
+    env: { ...process.env, PATH: `${bin}:${process.env.PATH}` },
+  })
+  assert.equal(r.status, 0, r.stderr)
+  assert.match(r.stdout, /Would write:/)
+  assert.match(r.stdout, /CONTRIBUTING\.md/)
+  assert.match(r.stdout, /\.github\/kanban\.json/)
+  assert.deepEqual(readdirSync(root).filter((f) => f !== '.git'), [])
+})
