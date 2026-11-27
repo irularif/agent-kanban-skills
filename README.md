@@ -17,16 +17,19 @@ Flow: plan, then `/plan-to-issues`, then `/start-issue <n>`, then a PR whose bod
 
 ## Install
 
-The `plan-to-issues` and `start-issue` skills call the CLI at `~/.agents/skills/init-kanban/scripts/kanban.mjs`, so install all three side by side under `~/.agents/skills`:
+Standard install with the [`skills`](https://github.com/vercel-labs/skills) CLI, which links the skills into every agent it detects (Claude Code, Codex, Gemini CLI, Cursor, and others):
 
 ```sh
-git clone https://github.com/irularif/kanban-skills.git
-cd kanban-skills
-mkdir -p ~/.agents/skills
-for s in init-kanban plan-to-issues start-issue; do ln -s "$PWD/skills/$s" ~/.agents/skills/$s; done
-# Claude Code reads ~/.claude/skills:
-for s in init-kanban plan-to-issues start-issue; do ln -s ../../.agents/skills/$s ~/.claude/skills/$s; done
+npx skills add irularif/kanban-skills -g        # pick your agents interactively
+npx skills add irularif/kanban-skills -g --all  # all three skills, every supported agent, no prompts
+npx skills update                               # later, to pull new versions
 ```
+
+Drop `-g` to install into the current project instead of your user directory.
+
+Install all three skills together: `plan-to-issues` and `start-issue` find the CLI in the sibling `init-kanban` folder. Each `SKILL.md` has a short "Locating the CLI" snippet that checks the sibling folder, then `./.agents/skills`, `~/.agents/skills` and `~/.claude/skills`.
+
+Manual install without the CLI: clone this repo and symlink each folder in `skills/` into `~/.agents/skills/` (and into your agent's own skills directory if it does not read `~/.agents/skills`).
 
 Then run `/init-kanban` inside the repository you want a board for.
 

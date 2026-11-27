@@ -39,7 +39,7 @@ case "$1" in
     [ "$visits" -le 1 ] || exit 0
     {
       echo "⚠ kanban: branch '$branch' is not linked to an issue."
-      echo "  Start work with /start-issue <n> (or: node ~/.agents/skills/init-kanban/scripts/kanban.mjs start <n>)"
+      echo "  Start work with /start-issue <n> (or ask your agent to run the start-issue skill)"
     } >&2
     ;;
   pre-push)

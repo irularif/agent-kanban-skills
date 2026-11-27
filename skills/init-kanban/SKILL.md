@@ -7,7 +7,16 @@ description: Use when the user types /init-kanban or asks to set up a GitHub kan
 
 Set up a GitHub Project kanban board for the current repo. The CLI does the work; you gather inputs and relay results. Never commit anything.
 
-CLI: `node ~/.agents/skills/init-kanban/scripts/kanban.mjs <command>`
+CLI: `node "$KANBAN" <command>` (see Locating the CLI).
+
+## Locating the CLI
+
+The CLI is `scripts/kanban.mjs` in this skill's folder. Set `KANBAN` to its path and use it as `$KANBAN`. Replace `<this skill dir>` with the directory that holds this `SKILL.md`:
+
+```sh
+KANBAN=$(for p in "<this skill dir>/scripts/kanban.mjs" ./.agents/skills/init-kanban/scripts/kanban.mjs ~/.agents/skills/init-kanban/scripts/kanban.mjs ~/.claude/skills/init-kanban/scripts/kanban.mjs; do [ -f "$p" ] && echo "$p" && break; done)
+[ -n "$KANBAN" ] || echo "init-kanban skill not found: install all three skills (npx skills add irularif/kanban-skills)"
+```
 
 ## Steps
 
@@ -18,7 +27,7 @@ CLI: `node ~/.agents/skills/init-kanban/scripts/kanban.mjs <command>`
 5. Run a dry run and show the output. If it prints `Using existing project #N '<title>'`, an existing board with the repo's name would be adopted: ask the user whether to proceed before step 6.
 
    ```
-   node ~/.agents/skills/init-kanban/scripts/kanban.mjs init --dry-run --area <a,b> [--collaborator user:READ|WRITE ...] --language <en|id>
+   node "$KANBAN" init --dry-run --area <a,b> [--collaborator user:READ|WRITE ...] --language <en|id>
    ```
 
 6. On the user's approval run the same command without `--dry-run`. It is safe to re-run; a second run lists nothing as created or written. The dry run also lists repo files it would write (`Would write`). If a hook file has an `exit` or `exec` line, relay the manual note about moving the block.

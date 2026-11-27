@@ -7,7 +7,16 @@ description: Use when the user types /plan-to-issues or asks to turn a markdown 
 
 Turn a markdown spec or plan into GitHub issues: one parent (epic) issue plus one sub-issue per PR-sized unit, all on the repo's Project board. Requires a board set up by `/init-kanban` (`.github/kanban.json`); if missing, tell the user to run `/init-kanban` first.
 
-CLI: `node ~/.agents/skills/init-kanban/scripts/kanban.mjs add-issues <units.json> [--dry-run]`
+CLI: `node "$KANBAN" add-issues <units.json> [--dry-run]`
+
+## Locating the CLI
+
+The CLI sits in the `init-kanban` skill folder. Resolve it once per session and use it as `$KANBAN`. Replace `<this skill dir>` with the directory that holds this `SKILL.md`:
+
+```sh
+KANBAN=$(for p in "<this skill dir>/../init-kanban/scripts/kanban.mjs" ./.agents/skills/init-kanban/scripts/kanban.mjs ~/.agents/skills/init-kanban/scripts/kanban.mjs ~/.claude/skills/init-kanban/scripts/kanban.mjs; do [ -f "$p" ] && echo "$p" && break; done)
+[ -n "$KANBAN" ] || echo "init-kanban skill not found: install all three skills (npx skills add irularif/kanban-skills)"
+```
 
 ## Steps
 
@@ -32,7 +41,7 @@ CLI: `node ~/.agents/skills/init-kanban/scripts/kanban.mjs add-issues <units.jso
    ```
 
    `source` is the doc path relative to the repo root. On a re-run use the same keys for existing units.
-5. **Dry run**: `node ~/.agents/skills/init-kanban/scripts/kanban.mjs add-issues <units.json> --dry-run`. It validates Area/Size/Status and lists what would be created. Fix any error and repeat.
+5. **Dry run**: `node "$KANBAN" add-issues <units.json> --dry-run`. It validates Area/Size/Status and lists what would be created. Fix any error and repeat.
 6. **Create**: run the same command without `--dry-run`. Issues already in the map are not created again. A failure midway leaves the map plus a `kanban-pending` line listing issues not yet fully wired (board, fields, parent link); re-running re-wires those without creating or editing issues.
 7. **Report** the issue links (parent and sub-issues) and tell the user to **commit the updated source doc**, which now holds the `kanban-issues` map.
 
