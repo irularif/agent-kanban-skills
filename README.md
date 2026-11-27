@@ -12,7 +12,7 @@ Flow: plan, then `/plan-to-issues`, then `/start-issue <n>`, then a PR whose bod
 
 ## Requirements
 
-- Node 20 or newer, `git`, and the [GitHub CLI](https://cli.github.com) (`gh`) logged in with the `project` scope: `gh auth refresh -s project`.
+- A recent Node (developed and tested on Node 26; uses `node:test` and `util.parseArgs`), `git`, and the [GitHub CLI](https://cli.github.com) (`gh`) logged in with the `project` scope: `gh auth refresh -s project`.
 - No npm dependencies.
 
 ## Install
