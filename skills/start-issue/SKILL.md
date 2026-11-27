@@ -13,7 +13,7 @@ The CLI sits in the `init-kanban` skill folder. Resolve it once per session and 
 
 ```sh
 KANBAN=$(for p in "<this skill dir>/../init-kanban/scripts/kanban.mjs" ./.agents/skills/init-kanban/scripts/kanban.mjs ~/.agents/skills/init-kanban/scripts/kanban.mjs ~/.claude/skills/init-kanban/scripts/kanban.mjs; do [ -f "$p" ] && echo "$p" && break; done)
-[ -n "$KANBAN" ] || echo "init-kanban skill not found: install all three skills (npx skills add irularif/kanban-skills)"
+[ -n "$KANBAN" ] || echo "init-kanban skill not found: install all three skills (npx skills add irularif/agent-kanban-skills)"
 ```
 
 ## Start
