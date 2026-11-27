@@ -15,7 +15,7 @@ The CLI is `scripts/kanban.mjs` in this skill's folder. Set `KANBAN` to its path
 
 ```sh
 KANBAN=$(for p in "<this skill dir>/scripts/kanban.mjs" ./.agents/skills/init-kanban/scripts/kanban.mjs ~/.agents/skills/init-kanban/scripts/kanban.mjs ~/.claude/skills/init-kanban/scripts/kanban.mjs; do [ -f "$p" ] && echo "$p" && break; done)
-[ -n "$KANBAN" ] || echo "init-kanban skill not found: install all three skills (npx skills add irularif/kanban-skills)"
+[ -n "$KANBAN" ] || echo "init-kanban skill not found: install all three skills (npx skills add irularif/agent-kanban-skills)"
 ```
 
 ## Steps

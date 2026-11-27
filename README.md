@@ -1,6 +1,6 @@
-# kanban-skills
+# agent-kanban-skills
 
-Three agent skills that turn a GitHub repository's issues into a kanban board (GitHub Projects v2) and keep it in sync while you work. They are plain `SKILL.md` folders plus one dependency-free Node CLI, so any coding agent that reads skills can use them (Claude Code, Codex, Gemini CLI, and so on).
+Let your AI coding agent run the GitHub Projects kanban for you, from spec to merge: it sets up the board, splits a plan into PR-sized issues, and moves each card from In progress to Done as you ship. Three plain `SKILL.md` folders plus one dependency-free Node CLI, usable by Claude Code, Codex, Gemini CLI, and any agent that reads skills.
 
 | Skill | What it does |
 |---|---|
@@ -20,8 +20,8 @@ Flow: plan, then `/plan-to-issues`, then `/start-issue <n>`, then a PR whose bod
 Standard install with the [`skills`](https://github.com/vercel-labs/skills) CLI, which links the skills into every agent it detects (Claude Code, Codex, Gemini CLI, Cursor, and others):
 
 ```sh
-npx skills add irularif/kanban-skills -g        # pick your agents interactively
-npx skills add irularif/kanban-skills -g --all  # all three skills, every supported agent, no prompts
+npx skills add irularif/agent-kanban-skills -g        # pick your agents interactively
+npx skills add irularif/agent-kanban-skills -g --all  # all three skills, every supported agent, no prompts
 npx skills update                               # later, to pull new versions
 ```
 
